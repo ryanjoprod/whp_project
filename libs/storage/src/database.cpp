@@ -89,7 +89,7 @@ namespace storage {
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string localId = columnText(s, 1);
-					people[key] = gedcomx::Person{ localId, loadNamesFor(key), loadFactsForPerson(key) };
+					people[key] = gedcomx::Person{ key, loadNamesFor(key), loadFactsForPerson(key) };
 				});
 
 			std::vector<gedcomx::Person> results;
@@ -152,8 +152,8 @@ namespace storage {
 					bindText(s, 2, rel.id);
 					bindText(s, 3, sourceId);
 					bindText(s, 4, rel.type);
-					bindText(s, 5, rel.person1Id);
-					bindText(s, 6, rel.person2Id);
+					bindText(s, 5, p1Key);
+					bindText(s, 6, p2Key);
 				});
 
 			exec("DELETE FROM relationship_facts WHERE relationship_id = '" + relKey + "';");
@@ -174,15 +174,15 @@ namespace storage {
 
 		std::vector<gedcomx::Relationship> loadAllRelationships() {
 			std::vector<gedcomx::Relationship> results;
-			query("SELECT rowKey, local_id, source_id, type, person1_id, person2_id FROM relationships;",
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id FROM relationships;",
 				[&](sqlite3_stmt* s) {
 					gedcomx::Relationship rel;
 					std::string relKey = columnText(s, 0);
 					rel.id = columnText(s, 1);
-					std::string sourceId = columnText(s, 2);
+					// std::string sourceId = columnText(s, 2);
 					rel.type = columnText(s, 3);
-					rel.person1Id = stripSourcePrefix(columnText(s, 4), sourceId);
-					rel.person2Id = stripSourcePrefix(columnText(s, 5), sourceId);
+					rel.person1Id = columnText(s, 4);
+					rel.person2Id = columnText(s, 5);
 					rel.facts = loadFactsForRelationship(relKey);
 					results.push_back(std::move(rel));
 				});
@@ -261,7 +261,7 @@ namespace storage {
 		}
 
 		std::vector<gedcomx::Fact> loadFactsForRelationship(const std::string& relKey) {
-			return loadFacts("relationhip_facts", "relationship_id", relKey);
+			return loadFacts("relationship_facts", "relationship_id", relKey);
 		}
 
 		std::vector<gedcomx::Fact> loadFacts(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {

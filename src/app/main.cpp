@@ -1,18 +1,11 @@
 #include <iostream>
 
-#include "window.h"
+#include "app.h"
 
 int main() {
 	try {
-		Window window;
-
-		while (window.isRunning()) {
-			window.processEvents();
-			window.beginFrame();
-			window.renderTitleBarAndMenu();
-			window.renderCanvas();
-			window.endFrame();
-		}
+		App app;
+		app.run();
 	}
 	catch (const std::exception& e) {
 		std::cerr << "Fatal error: " << e.what() << "\n";
