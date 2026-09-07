@@ -18,8 +18,23 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "hostOS": ["Windows"]
+          "hostOS": [ "Windows" ]
         }
+      }
+    },
+    {
+      "name": "linux-debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/$presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystem/vcpkg.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
       }
     }
   ]

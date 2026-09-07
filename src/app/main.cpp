@@ -1,69 +1,69 @@
-#include "storage/database.h"
-#include "gedcomx/parser.h"
+#include <SDL3/SDL.h>
 
-#include <fstream>
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_sdlrenderer3.h>
+
 #include <iostream>
-#include <vector>
-#include <string>
 
 int main() {
-	try {
-		storage::Database db("test.db");
-		std::vector<std::string> files = { "sample_person.json", "sample_person_2.json" };
 
-		for (const auto& filename : files) {
-			std::ifstream file(filename);
-			nlohmann::json document;
-			file >> document;
-
-			auto people = gedcomx::parsePersons(document);
-			auto relationships = gedcomx::parseRelationships(document);
-			auto sourceDescriptions = gedcomx::parseSourceDescriptions(document);
-
-			const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
-
-			for (const auto& s : sourceDescriptions) db.save(s);
-			for (const auto& p : people) db.save(p, sourceId);
-			for (const auto& r : relationships) db.save(r, sourceId);
-
-			std::cout << "Loaded file: " << filename << " (source " << sourceId << ")\n";
-		}
-
-		auto loadedPeople = db.loadAll();
-		std::cout << "\nAll persons across all sources (" << loadedPeople.size() << "):\n";
-		for (const auto& person : loadedPeople) {
-			std::cout << "  " << person.id << ": " << person.primaryFullText() << "\n";
-		}
-
-		auto loadedSources = db.loadAllSourceDescriptions();
-		std::cout << "All sources (" << loadedSources.size() << "):\n";
-		for (const auto& src : loadedSources) {
-			std::cout << "  " << src.id << ": " << src.primaryTitle() << "\n";
-		}
-
-		db.linkPersons("AGG1", {
-			{"S1", "P1"},
-			{"S2", "P1"}
-		});
-
-		auto aggregates = db.loadAggregatePersons();
-		std::cout << "\nAggregate persons (" << aggregates.size() << "):\n";
-		for (const auto& agg : aggregates) {
-			std::cout << "  " << agg.aggregateId << ":\n";
-			for (const auto& name : agg.names) {
-				for (const auto& form : name.nameForms) {
-					std::cout << "    name: " << form.fullText << "\n";
-				}
-			}
-			for (const auto& fact : agg.facts) {
-				std::cout << "    fact: " << fact.type << " (" << fact.date.original << ")\n";
-			}
-		}
-	}
-	catch (const std::exception& e) {
-		std::cerr << "Fatal error: " << e.what() << "\n";
+	if (!SDL_Init(SDL_INIT_VIDEO)) {
+		std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
 		return 1;
 	}
+
+	SDL_Window* window = SDL_CreateWindow("WHP - Genealogy Visualizer", 800, 600, 0);
+	if (!window) {
+		std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
+		SDL_Quit();
+		return 1;
+	}
+
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
+	if (!renderer) {
+		std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui::StyleColorsDark();
+
+	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer3_Init(renderer);
+
+	bool running = true;
+	while (running) {
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) {
+			ImGui_ImplSDL3_ProcessEvent(&event);
+			if (event.type == SDL_EVENT_QUIT) {
+				running = false;
+			}
+		}
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+
+		ImGui::ShowDemoWindow();
+
+		ImGui::Render();
+		SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
+		SDL_RenderClear(renderer);
+		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+		SDL_RenderPresent(renderer);
+	}
+
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
+
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 
 	return 0;
 }

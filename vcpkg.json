@@ -1,9 +1,14 @@
 {
   "name": "whp-program",
   "version": "0.1.0",
+  "builtin-baseline": "04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4",
   "dependencies": [
     "sqlite3",
-    "nlohmann-json"
-  ],
-  "builtin-baseline": "04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4"
+    "nlohmann-json",
+    "sdl3",
+    {
+      "name": "imgui",
+      "features": ["sdl3-binding", "sdl3-renderer-binding"]
+    }
+  ]
 }
