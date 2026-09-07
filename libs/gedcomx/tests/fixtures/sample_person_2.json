@@ -1,0 +1,40 @@
+{
+  "sourceDescriptions": [
+    {
+      "id": "S2",
+      "titles": [ { "value": "Family Bible Record" } ],
+      "citations": [ { "value": "Washington Family Bible, private collection." } ]
+    }
+  ],
+  "persons": [
+    {
+      "id": "P1",
+      "names": [
+        {
+          "nameForms": [
+            {
+              "fullText": "Geo. Washington",
+              "parts": [
+                {
+                  "value": "Geo.",
+                  "type": "http://gedcomx.org/Given"
+                },
+                {
+                  "value": "Washington",
+                  "type": "http://gedcomx.org/Surname"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": [
+        {
+          "id": "F1",
+          "type": "http://gedcomx.org/Birth",
+          "date": { "original": "Feb. 1732" }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+#pragma once
+
+#include <string>
+
+#include "gedcomx/fact.h"
+
+namespace gedcomx {
+
+	struct Relationship {
+		std::string id;
+		std::string type;
+		std::string person1Id;
+		std::string person2Id;
+		std::vector<Fact> facts;
+	};
+}

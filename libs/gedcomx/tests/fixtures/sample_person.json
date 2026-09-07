@@ -1,0 +1,85 @@
+{
+  "sourceDescriptions": [
+    {
+      "id": "S1",
+      "titles": [ { "value": "1900 U.S. Census, Washington Family" } ],
+      "citation": [{ "value": "United States Census Bureau, 1900 Census, Fairfax County, Virginia."}]
+    }
+  ],
+  "persons": [
+    {
+      "id": "P1",
+      "names": [
+        {
+          "nameForms": [
+            {
+              "fullText": "George Washington",
+              "parts": [
+                {
+                  "value": "George",
+                  "type": "http://gedcomx.org/Given"
+                },
+                {
+                  "value": "Washington",
+                  "type": "http://gedcomx.org/Surname"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": [
+        {
+          "id": "F1",
+          "type": "http://gedcomx.org/Birth",
+          "date": {
+            "original": "22 February 1732",
+            "formal": "+1732-02-22"
+          },
+          "place": { "original": "Westmoreland County, Virginia" }
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "names": [
+        {
+          "nameForms": [
+            {
+              "fullText": "Martha Washington",
+              "parts": [
+                {
+                  "value": "Martha",
+                  "type": "http://gedcomx.org/Given"
+                },
+                {
+                  "value": "Washington",
+                  "type": "http://gedcomx.org/Surname"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "R1",
+      "type": "http://gedcomx.org/Couple",
+      "person1": { "resource": "#P1" },
+      "person2": { "resource": "#P2" },
+      "facts": [
+        {
+          "id": "F1",
+          "type": "http://gedcomx.org/Marriage",
+          "date": {
+            "original": "6 January 1759",
+            "formal": "+1759-01-06"
+          },
+          "place": { "original": "New Kent County, Virginia" }
+        }
+      ]
+    }
+  ]
+}
