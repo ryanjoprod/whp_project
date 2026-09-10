@@ -1,5 +1,9 @@
 #include <stdexcept>
 #include <random>
+#include <algorithm>
+#include <cfloat>
+#include <unordered_set>
+// #include <iostream>  // used for debug
 
 #include "window.h"
 
@@ -124,17 +128,17 @@ void Window::renderTitleBarAndMenu() {
 	ImGui::End();
 }
 
-void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships, ImVec2 canvasOrigin, ImVec2 canvasSize) {
+void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
 	static std::mt19937 rng(12345);  // fixed seed: reproducible layout between runs
 	std::uniform_real_distribution<float> jitter(-50.0f, 50.0f);
 
-	// New nodes start near the canvas center with a little randn jitter,
-	// so two brand-new nodes don't spawn exactly on top of each other
-	// (which would make the repulsion force divide by zero).
-	ImVec2 center(canvasOrigin.x + canvasSize.x * 0.5f, canvasOrigin.y + canvasSize.y * 0.5f);
+	// Physics operates in a fixed world-space frame, completely independent
+	// of screen position/size or the camera. World (0,0) is just "wherever
+	// the graph settles" - the camera decides how that maps to the screen.
+	ImVec2 worldCenter(0.0f, 0.0f);
 	for (const auto& person : people) {
 		if (nodePositions_.find(person.id) == nodePositions_.end()) {
-			nodePositions_[person.id] = ImVec2(center.x + jitter(rng), center.y + jitter(rng));
+			nodePositions_[person.id] = ImVec2(worldCenter.x + jitter(rng), worldCenter.y + jitter(rng));
 			nodeVelocities_[person.id] = ImVec2(0, 0);
 		}
 	}
@@ -192,16 +196,18 @@ void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std:
 		forces[rel.person2Id].y -= fy;
 	}
 
-	// Centering: a weak pull toward canvas center keeps disconnected modes
+	// Centering: a weak pull toward worldCenter keeps disconnected modes
 	// (and the graph as a whole) from drifting outward indefinitely.
 	for (const auto& person : people) {
 		ImVec2& pos = nodePositions_[person.id];
-		forces[person.id].x += (center.x - pos.x) * centeringStrength;
-		forces[person.id].y += (center.y - pos.y) * centeringStrength;
+		forces[person.id].x += (worldCenter.x - pos.x) * centeringStrength;
+		forces[person.id].y += (worldCenter.y - pos.y) * centeringStrength;
 	}
 
 	// Inegrate: apply forces to velocity, velocity to position, then damp.
 	for (const auto& person : people) {
+		if (person.id == draggedNodeId_) continue;  // user has direct control right	now
+
 		ImVec2& vel = nodeVelocities_[person.id];
 		ImVec2& pos = nodePositions_[person.id];
 		ImVec2& f = forces[person.id];
@@ -231,13 +237,100 @@ void Window::renderCanvas(const std::vector<gedcomx::Person>& people, const std:
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
 	ImGui::Begin("Canvas", nullptr, canvasFlags);
+
+	// --- Node dragging / click selection ---
+	ImVec2 mousePos = ImGui::GetIO().MousePos;
+	const float clickMoveTolerance = 4.0f;
+
+	if (ImGui::IsWindowHovered()) {
+		// Right-drdag to pan (left-drag is already claimed by node dragging).
+		if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+			ImVec2 delta = ImGui::GetIO().MouseDelta;
+			camera_.pan(delta);
+		}
+
+		float wheel = ImGui::GetIO().MouseWheel;
+		if (wheel != 0.0f) {
+			float zoomFactor = (wheel > 0) ? 1.1f : (1.0f / 1.1f);
+			camera_.zoomAt(mousePos, zoomFactor);
+		}
+	}
 	
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	ImVec2 canvasOrigin = ImGui::GetWindowPos();  // top-left of this window, in screen coordinates
+	ImVec2 canvasSize = ImGui::GetWindowSize();
+	camera_.setViewport(canvasOrigin, canvasSize);
+
+	updateLayout(people, relationships);
+
+	// Drop any cached position/velocity for people no longer in the visible set
+	// (evicted by App's cap, or simply no longer reachable after a re-root).
+	std::unordered_set<std::string> currentIds;
+	for (const auto& person : people) currentIds.insert(person.id);
+
+	for (auto it = nodePositions_.begin(); it != nodePositions_.end(); ) {
+		if (!currentIds.count(it->first)) {
+			nodeVelocities_.erase(it->first);
+			it = nodePositions_.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+
+	if (needsRefit_ && !people.empty()) {
+		ImVec2 minB(FLT_MAX, FLT_MAX), maxB(-FLT_MAX, -FLT_MAX);
+		for (const auto& person : people) {
+			ImVec2 pos = nodePositions_.count(person.id) ? nodePositions_[person.id] : ImVec2(0, 0);
+			// std::cout << "  node " << person.id << " at (" << pos.x << "," << pos.y << ")\n";  // debug code
+			minB.x = std::min(minB.x, pos.x);
+			minB.y = std::min(minB.y, pos.y);
+			maxB.x = std::max(maxB.x, pos.x);
+			maxB.y = std::max(maxB.y, pos.y);
+			// std::cout << "Refit bounds: min(" << minB.x << "," << minB.y << ") max(" << maxB.x << "," << maxB.y << ")\n";  // debug code
+		}
+
+		camera_.refitToBounds(minB, maxB);
+		needsRefit_ = false;
+		// std::cout << "After refit: zoom = " << camera_.zoom() << ", viewportSize = (" << canvasSize.x << "," << canvasSize.y << ")\n";  // debug code
+	}
 
 	const float nodeRadius = 20.0f;
 
-	updateLayout(people, relationships, canvasOrigin, ImGui::GetWindowSize());
+	if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && draggedNodeId_.empty() && ImGui::IsWindowHovered()) {
+		// Hit-test: is the mouse over any node? Check topmost-drawn (last in
+		// the list) first, since that's what the user visually sees on top.
+		for (auto it = people.rbegin(); it != people.rend(); ++it) {
+			ImVec2 screenPos = camera_.worldToScreen(nodePositions_[it->id]);
+			float dx = mousePos.x - screenPos.x;
+			float dy = mousePos.y - screenPos.y;
+			float hitRadius = nodeRadius * camera_.zoom();
+			if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+				draggedNodeId_ = it->id;
+				dragStartMousePos_ = mousePos;
+				break;
+			}
+		}
+	}
+
+	if (!draggedNodeId_.empty()) {
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+			// Pin the dragged node directly to the cursor; zero its velocity
+			// so physics doesn't fling it once released.
+			nodePositions_[draggedNodeId_] = camera_.screenToWorld(mousePos);
+			nodeVelocities_[draggedNodeId_] = ImVec2(0, 0);
+		}
+		else {
+			// Mouse released: decide whether this was a click or a drag based
+			// on how far the mouse moved since the press started.
+			float dx = mousePos.x - dragStartMousePos_.x;
+			float dy = mousePos.y - dragStartMousePos_.y;
+			if (dx * dx + dy * dy <= clickMoveTolerance * clickMoveTolerance) {
+				selectedPersonId_ = draggedNodeId_;
+			}
+			draggedNodeId_.clear();  // mouse released - hand back to physics
+		}
+	}
 
 	// Edges first, so nodes render on top of the lines
 	// rather than lines being drawn over the nodes.
@@ -245,24 +338,79 @@ void Window::renderCanvas(const std::vector<gedcomx::Person>& people, const std:
 		auto it1 = nodePositions_.find(rel.person1Id);
 		auto it2 = nodePositions_.find(rel.person2Id);
 		if (it1 != nodePositions_.end() && it2 != nodePositions_.end()) {
-			drawList->AddLine(it1->second, it2->second, IM_COL32(150, 150, 150, 255), 2.0f);
+			drawList->AddLine(camera_.worldToScreen(it1->second), camera_.worldToScreen(it2->second), IM_COL32(150, 150, 150, 255), 2.0f);
 		}
 	}
 
 	// Third pass: draw nodes + labels on top.
 	for (const auto& person : people) {
-		ImVec2 nodeCenter = nodePositions_[person.id];
+		ImVec2 worldPos = nodePositions_[person.id];
+		ImVec2 screenPos = camera_.worldToScreen(worldPos);
+		float screenRadius = nodeRadius * camera_.zoom();
 
-		drawList->AddCircleFilled(nodeCenter, nodeRadius, IM_COL32(70, 130, 200, 255));
-		drawList->AddCircle(nodeCenter, nodeRadius, IM_COL32(255, 255, 255, 255), 0, 2.0f);
+		drawList->AddCircleFilled(screenPos, screenRadius, IM_COL32(70, 130, 200, 255));
+		drawList->AddCircle(screenPos, screenRadius, IM_COL32(255, 255, 255, 255), 0, 2.0f);
 
-		std::string label = person.primaryFullText();
-		ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
-		ImVec2 textPos(nodeCenter.x - textSize.x * 0.5f, nodeCenter.y + nodeRadius + 4.0f);
-		drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), label.c_str());
+		// LOD: skip labels once zoomed out far enough that text won't be legible anyway.
+		if (camera_.zoom() > 0.4f) {
+			std::string label = person.primaryFullText();
+			ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+			ImVec2 textPos(screenPos.x - textSize.x * 0.5f, screenPos.y + nodeRadius + 4.0f);
+			drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), label.c_str());
+		}
+	}
+
+	ImGui::End();  // Close the "Canvas" window
+
+	renderDetailsPanel(people);
+}
+
+void Window::renderDetailsPanel(const std::vector<gedcomx::Person>& people) {
+	if (selectedPersonId_.empty()) return;
+
+	auto it = std::find_if(people.begin(), people.end(),
+		[&](const gedcomx::Person& p) { return p.id == selectedPersonId_; });
+	if (it == people.end()) return;  // selected person isn't currently visible; nothing to show
+
+	const gedcomx::Person& person = *it;
+
+	ImGui::SetNextWindowSize(ImVec2(320, 0), ImGuiCond_FirstUseEver);
+	bool open = true;
+	if (ImGui::Begin("Person Details", &open)) {
+		ImGui::Text("%s", person.primaryFullText().c_str());
+		ImGui::Separator();
+
+		if (!person.sourceId.empty()) {
+			ImGui::TextDisabled("Source: %s", person.sourceId.c_str());
+		}
+
+		if (!person.facts.empty()) {
+			ImGui::Spacing();
+			ImGui::Text("Facts:");
+			for (const auto& fact : person.facts) {
+				ImGui::BulletText("%s: %s %s",
+					gedcomx::formatFactType(fact.type).c_str(),
+					fact.date.original.c_str(),
+					fact.place.original.c_str());
+			}
+		}
+	}
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	if (ImGui::Button("Explore from here")) {
+		reRootRequestId_ = person.id;
 	}
 
 	ImGui::End();
+
+	if (!open) selectedPersonId_.clear();  // user clicked the panel's own close button
+}
+
+std::string Window::consumeReRootRequest() {
+	std::string result = reRootRequestId_;
+	reRootRequestId_.clear();
+	return result;
 }
 
 void Window::endFrame() {

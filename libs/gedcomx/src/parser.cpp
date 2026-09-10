@@ -139,4 +139,13 @@ namespace gedcomx {
 
 		return fact;
 	}
+
+	std::string formatFactType(const std::string& typeUri) {
+		const std::string prefix = "http://gedcomx.org/";
+		if (typeUri.rfind(prefix, 0) == 0) {
+			return typeUri.substr(prefix.size());
+		}
+
+		return typeUri;  // unrecognized format - show it as-is rather than hide it
+	}
 }

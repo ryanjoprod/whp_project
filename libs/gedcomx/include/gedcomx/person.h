@@ -22,6 +22,7 @@ namespace gedcomx {
 
 	struct Person {
 		std::string id;
+		std::string sourceId;  // populated by storage on load; empty when freshly parsed
 		std::vector<Name> names;
 		std::vector<Fact> facts;
 

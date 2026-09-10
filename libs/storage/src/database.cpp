@@ -85,11 +85,12 @@ namespace storage {
 
 			// One query per person is simple to reason about; a single join
 			// would be faster but harder to read at this stage of the project.
-			query("SELECT row_key, local_id FROM persons;",
+			query("SELECT row_key, local_id, source_id FROM persons;",
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string localId = columnText(s, 1);
-					people[key] = gedcomx::Person{ key, loadNamesFor(key), loadFactsForPerson(key) };
+					std::string sourceId = columnText(s, 2);
+					people[key] = gedcomx::Person{ key, sourceId, loadNamesFor(key), loadFactsForPerson(key) };
 				});
 
 			std::vector<gedcomx::Person> results;
@@ -141,6 +142,18 @@ namespace storage {
 			return results;
 		}
 
+		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
+			std::optional<gedcomx::Person> result;
+			query("SELECT row_key, local_id, source_id FROM persons WHERE row_key = '" + personKey + "';",
+				[&](sqlite3_stmt* s) {
+					std::string key = columnText(s, 0);
+					std::string sourceId = columnText(s, 2);
+					result = gedcomx::Person{ key, sourceId, loadNamesFor(key), loadFactsForPerson(key) };
+				});
+
+			return result;
+		}
+
 		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
 			std::string relKey = rowKey(sourceId, rel.id);
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
@@ -180,6 +193,24 @@ namespace storage {
 					std::string relKey = columnText(s, 0);
 					rel.id = columnText(s, 1);
 					// std::string sourceId = columnText(s, 2);
+					rel.type = columnText(s, 3);
+					rel.person1Id = columnText(s, 4);
+					rel.person2Id = columnText(s, 5);
+					rel.facts = loadFactsForRelationship(relKey);
+					results.push_back(std::move(rel));
+				});
+
+			return results;
+		}
+
+		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey) {
+			std::vector<gedcomx::Relationship> results;
+
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id FROM relationships WHERE person1_id ='" + personKey + "' OR person2_id = '" + personKey + "';",
+				[&](sqlite3_stmt* s) {
+					gedcomx::Relationship rel;
+					std::string relKey = columnText(s, 0);
+					rel.id = columnText(s, 1);
 					rel.type = columnText(s, 3);
 					rel.person1Id = columnText(s, 4);
 					rel.person2Id = columnText(s, 5);
@@ -358,12 +389,20 @@ namespace storage {
 		return impl_->loadAggregatePersons();
 	}
 
+	std::optional<gedcomx::Person> Database::loadPerson(const std::string& personKey) {
+		return impl_->loadPerson(personKey);
+	}
+
 	void Database::save(const gedcomx::Relationship& relationship, const std::string& sourceId) {
 		impl_->save(relationship, sourceId);
 	}
 
 	std::vector<gedcomx::Relationship> Database::loadAllRelationships() {
 		return impl_->loadAllRelationships();
+	}
+
+	std::vector<gedcomx::Relationship> Database::loadRelationshipsForPerson(const std::string& personKey) {
+		return impl_->loadRelationshipsForPerson(personKey);
 	}
 	
 	void Database::save(const gedcomx::SourceDescription& source) {

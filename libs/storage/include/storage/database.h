@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <optional>
 
 namespace storage {
 	struct PersonRef {
@@ -45,9 +46,11 @@ namespace storage {
 		std::vector<gedcomx::Person> loadAll();
 		void linkPersons(const std::string& aggregateId, const std::vector<PersonRef>& refs);
 		std::vector<AggregatePerson> loadAggregatePersons();
+		std::optional<gedcomx::Person> loadPerson(const std::string& personKey);
 
 		void save(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		std::vector<gedcomx::Relationship> loadAllRelationships();
+		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey);
 
 		void save(const gedcomx::SourceDescription& source);
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions();

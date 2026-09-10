@@ -61,6 +61,50 @@
           ]
         }
       ]
+    },
+    {
+      "id": "P3",
+      "names": [
+        {
+          "nameForms": [
+            {
+              "fullText": "George Washington Jr.",
+              "parts": [
+                {
+                  "value": "George",
+                  "type": "http://gedcomx.org/Given"
+                },
+                {
+                  "value": "Washington Jr.",
+                  "type": "http://gedcomx.org/Surname"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "names": [
+        {
+          "nameForms": [
+            {
+              "fullText": "George Washington III",
+              "parts": [
+                {
+                  "value": "George",
+                  "type": "http://gedcomx.org/Given"
+                },
+                {
+                  "value": "Washington III",
+                  "type": "http://gedcomx.org/Surname"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "relationships": [
@@ -80,6 +124,18 @@
           "place": { "original": "New Kent County, Virginia" }
         }
       ]
+    },
+    {
+      "id": "R2",
+      "type": "http://gedcomx.org/ParentChild",
+      "person1": { "resource": "#P1" },
+      "person2": { "resource": "#P3" }
+    },
+    {
+      "id": "R3",
+      "type": "http://gedcomx.org/ParentChild",
+      "person1": { "resource": "#P3" },
+      "person2": { "resource": "#P4" }
     }
   ]
 }
