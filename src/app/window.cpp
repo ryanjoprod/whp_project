@@ -5,6 +5,8 @@
 #include <unordered_set>
 // #include <iostream>  // used for debug
 
+#include <SDL3/SDL_dialog.h>
+
 #include "window.h"
 
 namespace {
@@ -81,7 +83,9 @@ void Window::renderTitleBarAndMenu() {
 	// --- Menu bar ---
 	if (ImGui::BeginMenuBar()) {
 		if (ImGui::BeginMenu("File")) {
-			ImGui::MenuItem("Open Source File...");
+			if (ImGui::MenuItem("Open Source File...")) {
+				requestOpenFileDialog();
+			}
 			ImGui::MenuItem("Open Project...");
 			ImGui::Separator();
 			if (ImGui::MenuItem("Exit")) {
@@ -410,6 +414,45 @@ void Window::renderDetailsPanel(const std::vector<gedcomx::Person>& people) {
 std::string Window::consumeReRootRequest() {
 	std::string result = reRootRequestId_;
 	reRootRequestId_.clear();
+	return result;
+}
+
+void Window::requestOpenFileDialog() {
+	SDL_DialogFileFilter filters[] = {
+		{ "GEDCOM X (JSON)", "json" },
+		{ "All files", "*" }
+	};
+
+	SDL_ShowOpenFileDialog(
+		&Window::handleFileDialogResult,
+		this,  // userdata: how the static callback gets back to this instance 
+		window_,
+		filters,
+		2,  // nFilters
+		nullptr,  // default_location: let the OS pick
+		true  // allow_many: let the user select multiple files at once
+	);
+}
+
+void Window::handleFileDialogResult(void* userdata, const char* const* filelist, int filter) {
+	Window* self = static_cast<Window*>(userdata);
+
+	if (!filelist) {
+		// SDL signals an error this way - filelist is null, not empty
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(self->openedFilesMutex_);
+	for (int i = 0; filelist[i] != nullptr; ++i) {
+		self->openedFiles_.push_back(filelist[i]);
+	}
+}
+
+std::vector<std::string> Window::consumeOpenedFiles() {
+	std::lock_guard<std::mutex> lock(openedFilesMutex_);
+	std::vector<std::string> result = std::move(openedFiles_);
+	openedFiles_.clear();
+
 	return result;
 }
 

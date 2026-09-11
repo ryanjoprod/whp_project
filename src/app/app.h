@@ -13,7 +13,7 @@ public:
 	void run();
 
 private:
-	void loadFixtures();
+	std::string loadSourceFile(const std::string& filePath);
 
 	storage::Database db_;
 	Window window_;

@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <mutex>
 
 #include <sdl3/SDL.h>
 #include <imgui.h>
@@ -30,10 +31,13 @@ public:
 	void renderCanvas(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships);
 	void endFrame();
 
+	// Window resize and reframe
 	std::string consumeReRootRequest();
-
 	void requestRefit() { needsRefit_ = true; }
-
+	
+	// File open requests
+	void requestOpenFileDialog();
+	std::vector<std::string> consumeOpenedFiles();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -64,4 +68,9 @@ private:
 	// Camera stuff
 	Camera camera_;
 	bool needsRefit_ = true;  // set true whenever the visible node set changes
+
+	// File open requests
+	std::mutex openedFilesMutex_;
+	std::vector<std::string> openedFiles_;  // pending files, filled by the async callback
+	static void handleFileDialogResult(void* userdata, const char* const* filelist, int filter);
 };

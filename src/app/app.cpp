@@ -9,7 +9,7 @@
 #include "gedcomx/parser.h"
 
 App::App() : db_("test.db"), window_() {
-	loadFixtures();
+	// loadFixtures();
 
 	auto allPeople = db_.loadAll();
 	currentRootKey_ = allPeople.empty() ? "" : allPeople[0].id;	// placeholder root choice
@@ -52,24 +52,33 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 	window_.requestRefit();
 }
 
-void App::loadFixtures() {
-	std::vector<std::string> files = { "sample_person.json", "sample_person_2.json" };
+std::string App::loadSourceFile(const std::string& filePath) {
+	std::ifstream file(filePath);
+	if (!file) {
+		std::cerr << "Failed  to open file: " << filePath << "\n";
+		return "";
+	};
 
-	for (const auto& filename : files) {
-		std::ifstream file(filename);
-		nlohmann::json document;
-		file >> document;
+	nlohmann::json document;
+	file >> document;
 
-		auto sourceDescriptions = gedcomx::parseSourceDescriptions(document);
-		auto people = gedcomx::parsePersons(document);
-		auto relationships = gedcomx::parseRelationships(document);
+	auto sourceDescriptions = gedcomx::parseSourceDescriptions(document);
+	auto people = gedcomx::parsePersons(document);
+	auto relationships = gedcomx::parseRelationships(document);
 
-		const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
+	const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
 
-		for (const auto& s : sourceDescriptions) db_.save(s);
-		for (const auto& p : people) db_.save(p, sourceId);
-		for (const auto& r : relationships) db_.save(r, sourceId);
+	for (const auto& s : sourceDescriptions) db_.save(s);
+	for (const auto& p : people) db_.save(p, sourceId);
+	for (const auto& r : relationships) db_.save(r, sourceId);
+
+	// Return a re-rootable key for the first person in this file, it any,
+	// so the caller can immediately navigate to what was just loaded.
+	if (!people.empty()) {
+		return sourceId + ":" + people[0].id;
 	}
+
+	return"";
 }
 
 void App::evictFarthestUntilUnderCap() {
@@ -141,6 +150,15 @@ void App::run() {
 		window_.renderTitleBarAndMenu();
 		window_.renderCanvas(visiblePeople_, visibleRelationships_);
 		window_.endFrame();
+
+		for (const auto& path : window_.consumeOpenedFiles()) {
+			std::string newRoot = loadSourceFile(path);
+
+			if (!newRoot.empty()) {
+				currentRootKey_ = newRoot;
+				loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+			}
+		}
 
 		std::string requestedRoot = window_.consumeReRootRequest();
 		if (!requestedRoot.empty() && requestedRoot != currentRootKey_) {
