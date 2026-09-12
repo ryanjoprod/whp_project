@@ -63,3 +63,8 @@ void Camera::refitToBounds(ImVec2 minBounds, ImVec2 maxBounds, float marginPixel
 	float fitZoom = std::min(availableWidth / contentWidth, availableHeight / contentHeight);
 	zoom_ = std::clamp(fitZoom, 0.1f, 1.5f);
 }
+
+void Camera::setState(ImVec2 offset, float zoom) {
+	offset_ = offset;
+	zoom_ = std::clamp(zoom, 0.05f, 5.0f);
+}

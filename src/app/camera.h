@@ -18,6 +18,12 @@ public:
 	void refitToBounds(ImVec2 minBounds, ImVec2 maxBounds, float marginPixels = 80.0f);
 
 	float zoom() const { return zoom_; }
+	ImVec2 offset() const { return offset_; }
+
+	// Directly reestores a saved view - bypasses zoom-toward-cursor math,
+	// since loading a project should snap to the saved state instantly,
+	// not animate toward it the way interactive zoomAt() does.
+	void setState(ImVec2 offset, float zoom);
 
 private:
 	ImVec2 viewportOrigin_{ 0, 0 };

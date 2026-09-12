@@ -2,8 +2,11 @@
 
 #include <vector>
 #include <unordered_map>
+#include <optional>
+#include <memory>
 
 #include "window.h"
+#include "project.h"
 #include "storage/database.h"
 #include "gedcomx/person.h"
 
@@ -15,8 +18,16 @@ public:
 private:
 	std::string loadSourceFile(const std::string& filePath);
 
-	storage::Database db_;
+	std::optional<Project> currentProject_;
+	std::unique_ptr<storage::Database> db_;	 // null until a project is open
 	Window window_;
+
+	void newProject(const std::string& folderPath, const std::string& projectName);
+	void openProject(const std::string& whprojPath);
+	void saveProject();
+	void closeCurrentProject();
+
+	std::string projectFilePath() const;  // helper: projectFolder + "/" + projectName + ".whproj"
 
 	static constexpr size_t kMaxVisibleNodes = 200;  // this is how many people are visible on the screen at once
 

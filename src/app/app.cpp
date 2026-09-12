@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <queue>
 #include <unordered_set>
@@ -8,12 +9,95 @@
 #include "app.h"
 #include "gedcomx/parser.h"
 
-App::App() : db_("test.db"), window_() {
-	// loadFixtures();
+namespace fs = std::filesystem;
 
-	auto allPeople = db_.loadAll();
-	currentRootKey_ = allPeople.empty() ? "" : allPeople[0].id;	// placeholder root choice
-	loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+App::App() : window_() {}
+
+std::string App::projectFilePath() const {
+	if (!currentProject_) return "";
+	return currentProject_->projectFolder + "/" + currentProject_->projectName + ".whproj";
+}
+
+void App::newProject(const std::string& folderPath, const std::string& projectName) {
+	closeCurrentProject();
+
+	std::string projectFolder = folderPath + "/" + projectName;
+	fs::create_directories(projectFolder);
+	fs::create_directories(projectFolder + "/sources");
+
+	Project project;
+	project.projectFolder = projectFolder;
+	project.projectName = projectName;
+	project.dbFile = projectName + ".db";
+
+	db_ = std::make_unique<storage::Database>(projectFolder + "/" + project.dbFile);
+	currentProject_ = project;
+
+	saveProject();  // write the initial .whproj immediately
+}
+
+void App::openProject(const std::string& whoprojPath) {
+	closeCurrentProject();
+
+	std::ifstream file(whoprojPath);
+	if (!file) {
+		std::cerr << "Failed to open project file: " << whoprojPath << "\n";
+		return;
+	}
+
+	std::string jsonText((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	std::string projectFolder = fs::path(whoprojPath).parent_path().string();
+
+	auto loaded = deserializeProject(jsonText, projectFolder);
+	if (!loaded) {
+		std::cerr << "Failed to parse project file: " << whoprojPath << "\n";
+		return;
+	}
+
+	currentProject_ = loaded;
+	db_ = std::make_unique<storage::Database>(projectFolder + "/" + currentProject_->dbFile);
+
+	neighbothoodDepth_ = currentProject_->settings.neighborhoodDepth;
+	currentRootKey_ = currentProject_->currentRootKey;
+
+	window_.setCameraState(currentProject_->cameraOffsetX, currentProject_->cameraOffsetY, currentProject_->cameraZoom);
+
+	if (!currentRootKey_.empty()) {
+		auto rootPerson = db_->loadPerson(currentRootKey_);
+		if (rootPerson) {
+			loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+		}
+		else {
+			std::cerr << "Saved root person no longer exists; starting with an empty view.\n";
+			currentRootKey_.clear();
+		}
+	}
+}
+
+void App::saveProject() {
+	if (!currentProject_ || !db_) return;
+
+	currentProject_->currentRootKey = currentRootKey_;
+
+	ImVec2 offset = window_.cameraOffset();
+	currentProject_->cameraOffsetX = offset.x;
+	currentProject_->cameraOffsetY = offset.y;
+	currentProject_->cameraZoom = window_.cameraZoom();
+
+	currentProject_->settings.neighborhoodDepth = neighbothoodDepth_;
+
+	std::ofstream out(projectFilePath());
+	out << serializeProject(*currentProject_);
+}
+
+void App::closeCurrentProject() {
+	db_.reset();  // closes the database connection
+	currentProject_.reset();
+	visiblePeopleMap_.clear();
+	visibleRelationshipsMap_.clear();
+	visiblePeople_.clear();
+	visibleRelationships_.clear();
+	currentRootKey_.clear();
 }
 
 void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {						
@@ -29,12 +113,12 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 		auto [personKey, currentDepth] = toVisit.front();
 		toVisit.pop();
 
-		auto person = db_.loadPerson(personKey);
+		auto person = db_->loadPerson(personKey);
 		if (person) visiblePeopleMap_[personKey] = *person;  // union: insert-or-update, nothing removed here
 
 		if (currentDepth >= depth) continue;  //stop expanding past the requested depth
 
-		for (const auto& rel : db_.loadRelationshipsForPerson(personKey)) {
+		for (const auto& rel : db_->loadRelationshipsForPerson(personKey)) {
 			if (visitedRelationships.insert(rel.id).second) {
 				visibleRelationshipsMap_[rel.id] = rel;
 			}
@@ -53,9 +137,35 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 }
 
 std::string App::loadSourceFile(const std::string& filePath) {
-	std::ifstream file(filePath);
+	std::string pathToLoad = filePath;
+
+	if (currentProject_) {
+		// Copy the source into this project's sources/ folder, so the
+		// project stays self-contained/portable.
+		fs::path sourcePath(filePath);
+		std::string destPath = currentProject_->projectFolder + "/sources/" + sourcePath.filename().string();
+
+		try {
+			if (fs::absolute(sourcePath) != fs::absolute(destPath)) {
+				fs::copy_file(sourcePath, destPath, fs::copy_options::overwrite_existing);
+			}
+		}
+		catch (const std::exception& e) {
+			std::cerr << "Failed to copy source file into project: " << e.what() << "\n";
+			return "";  // don't proceed with a half-copied/inconsistent state
+		}
+
+		std::string relativePath = "sources/" + sourcePath.filename().string();
+		if (std::find(currentProject_->sourceFiles.begin(), currentProject_->sourceFiles.end(), relativePath) == currentProject_->sourceFiles.end()) {
+			currentProject_->sourceFiles.push_back(relativePath);
+		}
+
+		pathToLoad = destPath;  // parse the copy, not the original
+	}
+
+	std::ifstream file(pathToLoad);
 	if (!file) {
-		std::cerr << "Failed  to open file: " << filePath << "\n";
+		std::cerr << "Failed  to open file: " << pathToLoad << "\n";
 		return "";
 	};
 
@@ -68,9 +178,9 @@ std::string App::loadSourceFile(const std::string& filePath) {
 
 	const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
 
-	for (const auto& s : sourceDescriptions) db_.save(s);
-	for (const auto& p : people) db_.save(p, sourceId);
-	for (const auto& r : relationships) db_.save(r, sourceId);
+	for (const auto& s : sourceDescriptions) db_->save(s);
+	for (const auto& p : people) db_->save(p, sourceId);
+	for (const auto& r : relationships) db_->save(r, sourceId);
 
 	// Return a re-rootable key for the first person in this file, it any,
 	// so the caller can immediately navigate to what was just loaded.
@@ -150,6 +260,41 @@ void App::run() {
 		window_.renderTitleBarAndMenu();
 		window_.renderCanvas(visiblePeople_, visibleRelationships_);
 		window_.endFrame();
+		window_.setProjectOpen(currentProject_.has_value());
+
+		auto newProjectReq = window_.consumeNewProjectRequest();
+		if (newProjectReq) {
+			auto folder = newProjectReq->first;
+			auto name = newProjectReq->second;
+			if (currentProject_) {
+				window_.confirmProjectSwitch([this, folder, name]() {
+				saveProject();
+				newProject(folder, name);
+					});
+			}
+			else {
+				newProject(folder, name);
+			}
+		}
+
+		auto openProjectReq = window_.consumeOpenProjectRequest();
+		if (openProjectReq) {
+			std::cout << "Open project requested: " << *openProjectReq << "\n";
+			std::string path = *openProjectReq;
+			if (currentProject_) {
+				window_.confirmProjectSwitch([this, path]() {
+					saveProject();
+					openProject(path);
+					});
+			}
+			else {
+				openProject(path);
+			}
+		}
+
+		if (window_.consumeSaveProjectRequest()) {
+			saveProject();
+		}
 
 		for (const auto& path : window_.consumeOpenedFiles()) {
 			std::string newRoot = loadSourceFile(path);

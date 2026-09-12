@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <string>
 #include <mutex>
+#include <optional>
+#include <functional>
 
 #include <sdl3/SDL.h>
 #include <imgui.h>
@@ -35,9 +37,25 @@ public:
 	std::string consumeReRootRequest();
 	void requestRefit() { needsRefit_ = true; }
 	
-	// File open requests
+	// File menu requests
 	void requestOpenFileDialog();
 	std::vector<std::string> consumeOpenedFiles();
+	void requestOpenProjectDialog();
+	std::optional<std::string> consumeOpenProjectRequest();
+	void setProjectOpen(bool open) { projectOpen_ = open; }
+	void requestNewProjectDialog();
+	std::optional<std::pair<std::string, std::string>> consumeNewProjectRequest();
+	void requestSaveProject() { saveProjectRequested_ = true; }
+	bool consumeSaveProjectRequest();
+
+	// Call this instead of acting immediately, whenever a New/Open Project
+	// request meeds to first confirm discarding unsaved session state.
+	void confirmProjectSwitch(std::function<void()> onConfirmed);
+
+	// Camera state
+	void setCameraState(float x, float y, float zoom) { camera_.setState(ImVec2(x, y), zoom); }
+	ImVec2 cameraOffset() const { return camera_.offset(); }
+	float cameraZoom() const { return camera_.zoom(); }
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -69,8 +87,33 @@ private:
 	Camera camera_;
 	bool needsRefit_ = true;  // set true whenever the visible node set changes
 
-	// File open requests
+	// File menu requests
 	std::mutex openedFilesMutex_;
 	std::vector<std::string> openedFiles_;  // pending files, filled by the async callback
 	static void handleFileDialogResult(void* userdata, const char* const* filelist, int filter);
+	
+	// Open Projet (.whproj file dialog)
+	std::mutex openProjectMutex_;
+	std::optional<std::string> pendingOpenProjectPath_;
+	static void handleOpenProjectDialogResult(void* usedata, const char* const* filelist, int filter);
+	bool projectOpen_ = false;
+
+	// New Projet (folder dialog, then a name-prompt modal)
+	std::mutex newProjectFolderMutex_;
+	std::optional<std::string> pendingNewProjectFolder_;
+	static void handleNewProjectFolderDialogResult(void* userdata, const char* const* filelist, int filter);
+	bool showNewProjectNameModal_ = false;
+	std::string newProjectFolder_;
+	char newProjectNameBuffer_[128] = "";
+	std::optional<std::pair<std::string, std::string>> newProjectResult_;  // (folder, name) 
+
+	bool saveProjectRequested_ = false;
+	bool switchConfirmRequested_ = false;
+
+	void renderNewProjectModal();
+
+	// Switch projects
+	bool showSwitchConfirmModal_ = false;
+	std::function<void()> pendingSwitchAction_;  // what to do if the user confirms 
+	void renderSwitchConfirmModal();
 };

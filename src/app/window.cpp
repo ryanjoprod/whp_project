@@ -83,10 +83,21 @@ void Window::renderTitleBarAndMenu() {
 	// --- Menu bar ---
 	if (ImGui::BeginMenuBar()) {
 		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("New Project...")) {
+				requestNewProjectDialog();
+			}
+			if (ImGui::MenuItem("Open Project...")) {
+				requestOpenProjectDialog();
+			}
+			if (ImGui::MenuItem("Save Project...")) {
+				requestSaveProject();
+			}
+			ImGui::Separator();
+			ImGui::BeginDisabled(!projectOpen_);
 			if (ImGui::MenuItem("Open Source File...")) {
 				requestOpenFileDialog();
 			}
-			ImGui::MenuItem("Open Project...");
+			ImGui::EndDisabled();
 			ImGui::Separator();
 			if (ImGui::MenuItem("Exit")) {
 				running_ = false;
@@ -108,6 +119,9 @@ void Window::renderTitleBarAndMenu() {
 
 		ImGui::EndMenuBar();
 	}
+
+	renderNewProjectModal();
+	renderSwitchConfirmModal();
 
 	// Drag-to-move: uses absolute screen coordinates so movement doesn't
 	// lag behind or feed back on itself as the window's own position changes
@@ -241,6 +255,16 @@ void Window::renderCanvas(const std::vector<gedcomx::Person>& people, const std:
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
 	ImGui::Begin("Canvas", nullptr, canvasFlags);
+
+	if (people.empty()) {
+		ImVec2 center(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x * 0.5f,
+			ImGui::GetWindowPos().y + ImGui::GetWindowSize().y * 0.5f);
+		const char* message = "No data loaded. Use File \u2192 Open Source File... to get started.";
+		ImVec2 textSize = ImGui::CalcTextSize(message);
+		ImGui::GetWindowDrawList()->AddText(
+			ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
+			IM_COL32(150, 150, 150, 255), message);
+	}
 
 	// --- Node dragging / click selection ---
 	ImVec2 mousePos = ImGui::GetIO().MousePos;
@@ -417,6 +441,8 @@ std::string Window::consumeReRootRequest() {
 	return result;
 }
 
+// --- Open File ---
+
 void Window::requestOpenFileDialog() {
 	SDL_DialogFileFilter filters[] = {
 		{ "GEDCOM X (JSON)", "json" },
@@ -454,6 +480,127 @@ std::vector<std::string> Window::consumeOpenedFiles() {
 	openedFiles_.clear();
 
 	return result;
+}
+
+// --- Open Project ---
+
+void Window::requestOpenProjectDialog() {
+	SDL_DialogFileFilter filters[] = { { "WHP Project", "whproj" } };
+	SDL_ShowOpenFileDialog(&Window::handleOpenProjectDialogResult, this, window_, filters, 1, nullptr, false);
+}
+
+void Window::handleOpenProjectDialogResult(void* userdata, const char* const* filelist, int filter) {
+	Window* self = static_cast<Window*>(userdata);
+	if (!filelist || !filelist[0]) return;
+
+	std::lock_guard<std::mutex> lock(self->openProjectMutex_);
+	self->pendingOpenProjectPath_ = filelist[0];
+}
+
+std::optional<std::string> Window::consumeOpenProjectRequest() {
+	std::lock_guard<std::mutex> lock(openProjectMutex_);
+	std::optional<std::string> result = pendingOpenProjectPath_;
+	pendingOpenProjectPath_.reset();
+
+	return result;
+}
+
+// --- New Project ---
+
+void Window::requestNewProjectDialog() {
+	SDL_ShowOpenFolderDialog(&Window::handleNewProjectFolderDialogResult, this, window_, nullptr, false);
+}
+
+void Window::handleNewProjectFolderDialogResult(void* userdata, const char* const* filelist, int filter) {
+	Window* self = static_cast<Window*>(userdata);
+	if (!filelist || !filelist[0]) return;
+
+	std::lock_guard<std::mutex> lock(self->newProjectFolderMutex_);
+	self->pendingNewProjectFolder_ = filelist[0];
+}
+
+void Window::renderNewProjectModal() {
+	// Check if a folder was just picked - if so, stach it and open the modal.
+	{
+		std::lock_guard<std::mutex> lock(newProjectFolderMutex_);
+		if (pendingNewProjectFolder_) {
+			newProjectFolder_ = *pendingNewProjectFolder_;
+			pendingNewProjectFolder_.reset();
+			newProjectNameBuffer_[0] = '\0';
+			showNewProjectNameModal_ = true;
+			ImGui::OpenPopup("New Project");
+		}
+	}
+
+	if (ImGui::BeginPopupModal("New Project", &showNewProjectNameModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text("Project location: %s", newProjectFolder_.c_str());
+		ImGui::InputText("Project Name", newProjectNameBuffer_, sizeof(newProjectNameBuffer_));
+
+		bool nameEmpty = newProjectNameBuffer_[0] == '\0';
+		ImGui::BeginDisabled(nameEmpty);
+		if (ImGui::Button("Create")) {
+			newProjectResult_ = { newProjectFolder_, std::string(newProjectNameBuffer_) };
+			ImGui::CloseCurrentPopup();
+			showNewProjectNameModal_ = false;
+		}
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) {
+			ImGui::CloseCurrentPopup();
+			showNewProjectNameModal_ = false;
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+std::optional<std::pair<std::string, std::string>> Window::consumeNewProjectRequest() {
+	auto result = newProjectResult_;
+	newProjectResult_.reset();
+	return result;
+}
+
+// --- Save Project ---
+
+bool Window::consumeSaveProjectRequest() {
+	bool result = saveProjectRequested_;
+	saveProjectRequested_ = false;
+	return result;
+}
+
+// --- Project Switch ---
+
+void Window::confirmProjectSwitch(std::function<void()> onConfirmed) {
+	pendingSwitchAction_ = std::move(onConfirmed);
+	switchConfirmRequested_ = true;
+}
+
+void Window::renderSwitchConfirmModal() {
+	if (switchConfirmRequested_) {
+		switchConfirmRequested_ = false;
+		showSwitchConfirmModal_ = true;
+		ImGui::OpenPopup("Confirm Switch Project");
+	}
+
+	if (ImGui::BeginPopupModal("Confirm Switch Project", &showSwitchConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text("The current project will be saved before switching.");
+		ImGui::Spacing();
+
+		if (ImGui::Button("Switch")) {
+			if (pendingSwitchAction_) pendingSwitchAction_();
+			ImGui::CloseCurrentPopup();
+			showSwitchConfirmModal_ = false;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) {
+			pendingSwitchAction_ = nullptr;
+			ImGui::CloseCurrentPopup();
+			showSwitchConfirmModal_ = false;
+		}
+
+		ImGui::EndPopup();
+	}
 }
 
 void Window::endFrame() {
