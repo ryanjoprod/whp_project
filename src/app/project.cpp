@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "project.h"
+#include "logger.h"
 
 std::string serializeProject(const Project& project) {
 	nlohmann::json j;
@@ -43,7 +44,7 @@ std::optional<Project> deserializeProject(const std::string& jsonText, const std
 		return project;
 	}
 	catch (const std::exception& e) {
-		std::cerr << "Failed to parse file: " << e.what() << "\n";
+		Logger::log(LogLevel::Error, std::string("Failed to parse file: ") + e.what());
 		return std::nullopt;
 	}
 }

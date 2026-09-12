@@ -57,10 +57,15 @@ public:
 	ImVec2 cameraOffset() const { return camera_.offset(); }
 	float cameraZoom() const { return camera_.zoom(); }
 
+	// Error Logging
+	void renderLogWindow();
+	void toggleLogWindow() { showLogWindow_ = !showLogWindow_; }
+
 private:
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
 	bool running_ = true;
+	bool showLogWindow_ = false;
 
 	// Window movement and position
 	bool draggingWindow_ = false;

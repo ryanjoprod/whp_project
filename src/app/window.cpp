@@ -8,6 +8,7 @@
 #include <SDL3/SDL_dialog.h>
 
 #include "window.h"
+#include "logger.h"
 
 namespace {
 	constexpr float kTitleBarHeight = 32.0f;
@@ -106,6 +107,9 @@ void Window::renderTitleBarAndMenu() {
 		}
 		if (ImGui::BeginMenu("View")) {
 			ImGui::MenuItem("Layers");
+			if (ImGui::MenuItem("Log")) {
+				toggleLogWindow();
+			}
 			ImGui::EndMenu();
 		}
 
@@ -122,6 +126,7 @@ void Window::renderTitleBarAndMenu() {
 
 	renderNewProjectModal();
 	renderSwitchConfirmModal();
+	renderLogWindow();
 
 	// Drag-to-move: uses absolute screen coordinates so movement doesn't
 	// lag behind or feed back on itself as the window's own position changes
@@ -601,6 +606,27 @@ void Window::renderSwitchConfirmModal() {
 
 		ImGui::EndPopup();
 	}
+}
+
+void Window::renderLogWindow() {
+	if (!showLogWindow_) return;
+
+	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Log", &showLogWindow_)) {
+		ImGui::PushTextWrapPos(0.0f);  // word-wrap
+		for (const auto& entry : Logger::recentEntries()) {
+			ImVec4 color = entry.level == LogLevel::Error ? ImVec4(1.0f, 0.4f, 0.4f, 1.0f)
+				: entry.level == LogLevel::Warning ? ImVec4(1.0f, 0.8f, 0.3f, 1.0f)
+				: ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+			ImGui::TextColored(color, "%s", entry.message.c_str());
+		}
+
+		if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+			ImGui::SetScrollHereY(1.0f);  // auto-scroll to newest, unless the user	scrolled up to read histroy
+		}
+	}
+
+	ImGui::End();
 }
 
 void Window::endFrame() {

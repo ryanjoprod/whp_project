@@ -1,8 +1,11 @@
 #include <iostream>
 
 #include "app.h"
+#include "logger.h"
 
 int main() {
+	Logger::init("whp_program.log");
+
 	try {
 		App app;
 		app.run();

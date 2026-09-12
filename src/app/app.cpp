@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "app.h"
+#include "logger.h"
 #include "gedcomx/parser.h"
 
 namespace fs = std::filesystem;
@@ -41,7 +42,7 @@ void App::openProject(const std::string& whoprojPath) {
 
 	std::ifstream file(whoprojPath);
 	if (!file) {
-		std::cerr << "Failed to open project file: " << whoprojPath << "\n";
+		Logger::log(LogLevel::Error, "Failed to open project file: " + whoprojPath);
 		return;
 	}
 
@@ -50,7 +51,7 @@ void App::openProject(const std::string& whoprojPath) {
 
 	auto loaded = deserializeProject(jsonText, projectFolder);
 	if (!loaded) {
-		std::cerr << "Failed to parse project file: " << whoprojPath << "\n";
+		Logger::log(LogLevel::Error, "Failed to parse project file: " + whoprojPath);
 		return;
 	}
 
@@ -68,7 +69,7 @@ void App::openProject(const std::string& whoprojPath) {
 			loadNeighborhood(currentRootKey_, neighbothoodDepth_);
 		}
 		else {
-			std::cerr << "Saved root person no longer exists; starting with an empty view.\n";
+			Logger::log(LogLevel::Error, "Saved root person no longer exists; starting with an empty view.\n");
 			currentRootKey_.clear();
 		}
 	}
@@ -151,7 +152,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 			}
 		}
 		catch (const std::exception& e) {
-			std::cerr << "Failed to copy source file into project: " << e.what() << "\n";
+			Logger::log(LogLevel::Error, std::string("Failed to copy source file into project: ") + e.what());
 			return "";  // don't proceed with a half-copied/inconsistent state
 		}
 
@@ -165,7 +166,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 
 	std::ifstream file(pathToLoad);
 	if (!file) {
-		std::cerr << "Failed  to open file: " << pathToLoad << "\n";
+		Logger::log(LogLevel::Error, "Failed  to open file: " + pathToLoad);
 		return "";
 	};
 
@@ -259,6 +260,7 @@ void App::run() {
 		window_.beginFrame();
 		window_.renderTitleBarAndMenu();
 		window_.renderCanvas(visiblePeople_, visibleRelationships_);
+		window_.renderLogWindow();
 		window_.endFrame();
 		window_.setProjectOpen(currentProject_.has_value());
 
@@ -266,49 +268,86 @@ void App::run() {
 		if (newProjectReq) {
 			auto folder = newProjectReq->first;
 			auto name = newProjectReq->second;
+
 			if (currentProject_) {
+				// The confirm/switch itself can't throw - only the deferred
+				// lambda's actual work can, so that's where the try/catch belongs
 				window_.confirmProjectSwitch([this, folder, name]() {
-				saveProject();
-				newProject(folder, name);
-					});
+					try {
+						saveProject();
+						newProject(folder, name);
+					}
+					catch (const std::exception& e) {
+						Logger::log(LogLevel::Error, std::string("Failed to create project: ") + e.what());
+					}
+				});
 			}
 			else {
-				newProject(folder, name);
+				try {
+					newProject(folder, name);
+				}
+				catch (const std::exception& e) {
+					Logger::log(LogLevel::Error, std::string("Failed to create project: ") + e.what());
+				}
 			}
 		}
 
 		auto openProjectReq = window_.consumeOpenProjectRequest();
 		if (openProjectReq) {
-			std::cout << "Open project requested: " << *openProjectReq << "\n";
 			std::string path = *openProjectReq;
 			if (currentProject_) {
 				window_.confirmProjectSwitch([this, path]() {
-					saveProject();
-					openProject(path);
-					});
+					try {
+						saveProject();
+						openProject(path);
+					}
+					catch (const std::exception& e) {
+						Logger::log(LogLevel::Error, std::string("Failed to open project: ") + e.what());
+					}
+				});
 			}
 			else {
-				openProject(path);
+				try {
+					openProject(path);
+				}
+				catch (const std::exception& e) {
+					Logger::log(LogLevel::Error, std::string("Failed to open project: ") + e.what());
+				}
 			}
 		}
 
 		if (window_.consumeSaveProjectRequest()) {
-			saveProject();
+			try {
+				saveProject();
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to save project: ") + e.what());
+			}
 		}
 
 		for (const auto& path : window_.consumeOpenedFiles()) {
-			std::string newRoot = loadSourceFile(path);
+			try {
+				std::string newRoot = loadSourceFile(path);
 
-			if (!newRoot.empty()) {
-				currentRootKey_ = newRoot;
-				loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+				if (!newRoot.empty()) {
+					currentRootKey_ = newRoot;
+					loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+				}
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, "Failed to load source file '" + path + "':" + e.what());
 			}
 		}
 
 		std::string requestedRoot = window_.consumeReRootRequest();
 		if (!requestedRoot.empty() && requestedRoot != currentRootKey_) {
-			currentRootKey_ = requestedRoot;
-			loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+			try {
+				currentRootKey_ = requestedRoot;
+				loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load neighborhood: ") + e.what());
+			}
 		}
 	}
 }
