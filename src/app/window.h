@@ -66,6 +66,7 @@ private:
 	SDL_Renderer* renderer_ = nullptr;
 	bool running_ = true;
 	bool showLogWindow_ = false;
+	static constexpr float kTitleBarHeight = 32.0f;
 
 	// Window movement and position
 	bool draggingWindow_ = false;
