@@ -46,6 +46,8 @@ namespace gedcomx {
 			}
 		}
 
+		person.conclusion = parseConclusion(j);
+
 		return person;
 	}
 
@@ -76,6 +78,8 @@ namespace gedcomx {
 				rel.facts.push_back(parseFact(factJson));
 			}
 		}
+
+		rel.conclusion = parseConclusion(j);
 
 		return rel;
 	}
@@ -135,7 +139,12 @@ namespace gedcomx {
 
 		if (j.contains("place")) {
 			fact.place.original = j.at("place").value("original", "");
+			if (j.at("place").contains("description")) {
+				fact.place.descriptionId = stripResourceRef(j.at("place").at("description").value("resource", ""));
+			}
 		}
+
+		fact.conclusion = parseConclusion(j);
 
 		return fact;
 	}
@@ -147,5 +156,195 @@ namespace gedcomx {
 		}
 
 		return typeUri;  // unrecognized format - show it as-is rather than hide it
+	}
+
+	Conclusion parseConclusion(const nlohmann::json& j) {
+		Conclusion conclusion;
+		conclusion.confidence = j.value("confidence", "");
+		conclusion.lang = j.value("lang", "");
+
+		if (j.contains("sources")) {
+			for (const auto& srcJson : j.at("sources")) {
+				SourceReference ref;
+				ref.sourceDescriptionId = stripResourceRef(srcJson.value("description", nlohmann::json::object()).value("resource", ""));
+				conclusion.sources.push_back(std::move(ref));
+			}
+		}
+
+		if (j.contains("notes")) {
+			for (const auto& noteJson : j.at("notes")) {
+				Note note;
+				note.lang = noteJson.value("lang", "");
+				note.subject = noteJson.value("subject", "");
+				note.text = noteJson.value("text", "");
+
+				conclusion.notes.push_back(std::move(note));
+			}
+		}
+
+		return conclusion;
+	}
+
+	Agent parseAgent(const nlohmann::json& j) {
+		Agent agent;
+		agent.id = j.value("id", "");
+
+		if (j.contains("names")) {
+			for (const auto& n : j.at("names")) {
+				agent.names.push_back({ n.value("lang", ""), n.value("value", "") });
+			}
+		}
+
+		if (j.contains("emails")) {
+			for (const auto& e : j.at("emails")) {
+				agent.emails.push_back(e.value("resource", ""));
+			}
+		}
+
+		if (j.contains("phones")) {
+			for (const auto& p : j.at("phones")) {
+				agent.phones.push_back(p.value("resource", ""));
+			}
+		}
+
+		if (j.contains("addresses")) {
+			for (const auto& a : j.at("addresses")) {
+				Address addr;
+
+				addr.street = a.value("street", "");
+				addr.city = a.value("city", "");
+				addr.stateOrProvince = a.value("stateOrProvidence", "");
+				addr.postalCode = a.value("postalCode", "");
+				addr.country = a.value("country", "");
+
+				agent.addresses.push_back(std::move(addr));
+			}
+		}
+
+		return agent;
+	}
+
+	std::vector<Agent> parseAgents(const nlohmann::json& document) {
+		std::vector<Agent> agents;
+
+		if (document.contains("agents")) {
+			for (const auto& j : document.at("agents")) {
+				agents.push_back(parseAgent(j));
+			}
+		}
+
+		return agents;
+	}
+
+	EventRole parseEventRole(const nlohmann::json& j) {
+		EventRole role;
+		role.type = j.value("type", "");
+		role.details = j.value("details", "");
+
+		if (j.contains("person")) {
+			role.personId = stripResourceRef(j.at("person").value("resource", ""));
+		}
+
+		role.conclusion = parseConclusion(j);
+
+		return role;
+	}
+
+	Event parseEvent(const nlohmann::json& j) {
+		Event event;
+		event.id = j.value("id", "");
+		event.type = j.value("type", "");
+
+		if (j.contains("date")) {
+			event.date.original = j.at("date").value("original", "");
+			event.date.formal = j.at("date").value("formal", "");
+		}
+
+		if (j.contains("place")) {
+			event.place.original = j.at("place").value("original", "");
+			if (j.at("place").contains("description")) {
+				event.place.descriptionId = stripResourceRef(j.at("place").at("description").value("resource", ""));
+			}
+		}
+
+		if (j.contains("roles")) {
+			for (const auto& roleJson : j.at("roles")) {
+				event.roles.push_back(parseEventRole(roleJson));
+			}
+		}
+
+		event.conclusion = parseConclusion(j);
+
+		return event;
+	}
+
+	std::vector<Event> parseEvents(const nlohmann::json& document) {
+		std::vector<Event> events;
+		if (document.contains("events")) {
+			for (const auto& j : document.at("events")) {
+				events.push_back(parseEvent(j));
+			}
+		}
+
+		return events;
+	}
+
+	Document parseDocument(const nlohmann::json& j) {
+		Document doc;
+
+		doc.id = j.value("id", "");
+		doc.type = j.value("type", "");
+		doc.textType = j.value("textType", "");
+		doc.extracted = j.value("extracted", false);
+		doc.text = j.value("text", "");
+		doc.conclusion = parseConclusion(j);
+
+		return doc;
+	}
+
+	std::vector<Document> parseDocuments(const nlohmann::json& document) {
+		std::vector<Document> docs;
+		if (document.contains("documents")) {
+			for (const auto& j : document.at("documents")) {
+				docs.push_back(parseDocument(j));
+			}
+		}
+
+		return docs;
+	}
+
+	PlaceDescription parsePlaceDescription(const nlohmann::json& j) {
+		PlaceDescription place;
+		place.id = j.value("id", "");
+		place.type = j.value("type", "");
+
+		if (j.contains("names")) {
+			for (const auto& n : j.at("names")) {
+				place.names.push_back({ n.value("lang", ""), n.value("value", "") });
+			}
+		}
+
+		if (j.contains("latitude")) place.latitude = j.at("latitude").get<double>();
+		if (j.contains("longitude")) place.longitude = j.at("longitude").get<double>();
+
+		if (j.contains("jurisdiction")) {
+			place.jurisdictionId = stripResourceRef(j.at("jurisdiction").value("resource", ""));
+		}
+
+		place.conclusion = parseConclusion(j);
+
+		return place;
+	}
+
+	std::vector<PlaceDescription> parsePlaceDescriptions(const nlohmann::json& document) {
+		std::vector<PlaceDescription> places;
+
+		if (document.contains("places")) {
+			for (const auto& j : document.at("places")) {
+				places.push_back(parsePlaceDescription(j));
+			}
+		}
+
+		return places;
 	}
 }

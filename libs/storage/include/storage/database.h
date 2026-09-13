@@ -1,13 +1,17 @@
 #pragma once
 
-#include "gedcomx/person.h"
-#include "gedcomx/relationship.h"
-#include "gedcomx/source_description.h"
-
 #include <memory>
 #include <string>
 #include <vector>
 #include <optional>
+
+#include "gedcomx/person.h"
+#include "gedcomx/relationship.h"
+#include "gedcomx/source_description.h"
+#include "gedcomx/agent.h"
+#include "gedcomx/event.h"
+#include "gedcomx/document.h"
+#include "gedcomx/place_description.h"
 
 namespace storage {
 	struct PersonRef {
@@ -49,11 +53,22 @@ namespace storage {
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey);
 
 		void save(const gedcomx::Relationship& relationship, const std::string& sourceId);
-		std::vector<gedcomx::Relationship> loadAllRelationships();
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey);
 
 		void save(const gedcomx::SourceDescription& source);
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions();
+
+		void save(const gedcomx::Agent& agent);
+		std::vector<gedcomx::Agent> loadAllAgents();
+
+		void save(const gedcomx::Event& event);
+		std::vector<gedcomx::Event> loadAllEvents();
+
+		void save(const gedcomx::Document& document);
+		std::vector<gedcomx::Document> loadAllDocuments();
+
+		void save(const gedcomx::PlaceDescription& place);
+		std::vector<gedcomx::PlaceDescription> loadAllPlaces();
 
 	private:
 		class Impl;

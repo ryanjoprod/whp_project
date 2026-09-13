@@ -3,6 +3,7 @@
 #include <string>
 
 #include "gedcomx/fact.h"
+#include "gedcomx/conclusion.h"
 
 namespace gedcomx {
 
@@ -12,5 +13,6 @@ namespace gedcomx {
 		std::string person1Id;
 		std::string person2Id;
 		std::vector<Fact> facts;
+		Conclusion conclusion;
 	};
 }

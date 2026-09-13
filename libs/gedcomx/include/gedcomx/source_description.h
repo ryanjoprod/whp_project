@@ -3,12 +3,9 @@
 #include <string>
 #include <vector>
 
+#include "gedcomx/text_value.h"
+
 namespace gedcomx {
-	//A title or citation string, optionally tagged with a language (BCP 47).
-	struct TextValue {
-		std::string lang;
-		std::string value;
-	};
 
 	struct SourceCitation {
 		std::string lang;

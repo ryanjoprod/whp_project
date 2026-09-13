@@ -9,6 +9,11 @@
   "persons": [
     {
       "id": "P1",
+      "confidence": "http://gedcomx.org/High",
+      "lang": "en",
+      "notes": [
+        {"text": "Verified against family bible record."}
+      ],
       "names": [
         {
           "nameForms": [
@@ -36,7 +41,13 @@
             "original": "22 February 1732",
             "formal": "+1732-02-22"
           },
-          "place": { "original": "Westmoreland County, Virginia" }
+          "place": {
+            "original": "Westmoreland County, Virginia",
+            "description": { "resource": "#PL1" }
+          },
+          "sources": [
+            { "description": { "resource": "#S2" } }
+          ]
         }
       ]
     },
@@ -111,6 +122,10 @@
     {
       "id": "R1",
       "type": "http://gedcomx.org/Couple",
+      "confidence": "http://gedcomx.org/Medium",
+      "notes": [
+        { "text": "Marriage date inferred from church records." }
+      ],
       "person1": { "resource": "#P1" },
       "person2": { "resource": "#P2" },
       "facts": [
@@ -136,6 +151,61 @@
       "type": "http://gedcomx.org/ParentChild",
       "person1": { "resource": "#P3" },
       "person2": { "resource": "#P4" }
+    }
+  ],
+  "agents": [
+    {
+      "id": "A1",
+      "names": [ { "value": "Jane Researcher" } ],
+      "emails": [ { "resource": "mailto:jane@example.com" } ],
+      "addresses": [
+        {
+          "city": "Richmond",
+          "stateOrProvince": "Virginia",
+          "country": "USA"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "E1",
+      "type": "http://gedcomx.org/Marriage",
+      "date": { "original": "6 January 1759" },
+      "place": { "original": "White House Plantation, Virginia" },
+      "roles": [
+        {
+          "type": "http://gedcomx.org/Principal",
+          "person": { "resource": "#P1" }
+        },
+        {
+          "type": "http://gedcomx.org/Principal",
+          "person": { "resource": "#P2" }
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "id": "D1",
+      "type": "http://gedcomx.org/Analysis",
+      "textType": "plain",
+      "text": "Based on matching birthdates and family bible records, I conclude that S1:P1 and S2:P1 refer to the same individual."
+    }
+  ],
+  "places": [
+    {
+      "id": "PL1",
+      "names": [ { "value": "Westmoreland County" } ],
+      "type": "http://gedcomx.org/County",
+      "latitude": 38.1265,
+      "longitude": -76.8586,
+      "jurisdiction": { "resource": "#PL2" }
+    },
+    {
+      "id": "PL2",
+      "names": [ { "value": "Virginia" } ],
+      "type": "http://gedcomx.org/State"
     }
   ]
 }

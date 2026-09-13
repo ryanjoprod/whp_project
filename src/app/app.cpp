@@ -176,12 +176,22 @@ std::string App::loadSourceFile(const std::string& filePath) {
 	auto sourceDescriptions = gedcomx::parseSourceDescriptions(document);
 	auto people = gedcomx::parsePersons(document);
 	auto relationships = gedcomx::parseRelationships(document);
+	auto agents = gedcomx::parseAgents(document);
+	auto events = gedcomx::parseEvents(document);
+	auto documents = gedcomx::parseDocuments(document);
+	auto places = gedcomx::parsePlaceDescriptions(document);
 
 	const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
 
+	for (const auto& p : places) db_->save(p);
 	for (const auto& s : sourceDescriptions) db_->save(s);
 	for (const auto& p : people) db_->save(p, sourceId);
 	for (const auto& r : relationships) db_->save(r, sourceId);
+	for (const auto& a : agents) db_->save(a);
+	for (const auto& e : events) db_->save(e);
+	for (const auto& d : documents) db_->save(d);
+
+	// temporary test print code goes here
 
 	// Return a re-rootable key for the first person in this file, it any,
 	// so the caller can immediately navigate to what was just loaded.

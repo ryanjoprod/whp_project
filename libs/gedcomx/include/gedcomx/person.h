@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "gedcomx/fact.h"
+#include "gedcomx/conclusion.h"
 
 namespace gedcomx {
 	struct NamePart {
@@ -25,6 +26,7 @@ namespace gedcomx {
 		std::string sourceId;  // populated by storage on load; empty when freshly parsed
 		std::vector<Name> names;
 		std::vector<Fact> facts;
+		Conclusion conclusion;
 
 		// Convenience accessor - not part of GEDCOM X itself, just useful for
 		// display/storage code that wants "the name" witout walking the tree.

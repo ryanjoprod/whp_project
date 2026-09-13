@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "gedcomx/conclusion.h"
+
 namespace gedcomx {
 	struct Date {
 		std::string original;  // human-readable, e.g. "9 April 2001"
@@ -10,6 +12,7 @@ namespace gedcomx {
 
 	struct PlaceReference {
 		std::string original;  // human-readable place name, e.g. "Fairfax County, Virginia"
+		std::string descriptionId;  // optional link to a PlaceDescription, resolved from "#PL1" -> "PL1"
 	};
 
 	struct Fact {
@@ -18,6 +21,7 @@ namespace gedcomx {
 		Date date;
 		PlaceReference place;
 		std::string value;  // free-text value, when there's no structured date/place
+		Conclusion conclusion;
 	};
 
 	// Converts a GEDCOM X type URI (e.g. "http://gedcomx.org/Birth") into a
