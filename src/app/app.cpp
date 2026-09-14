@@ -8,11 +8,15 @@
 
 #include "app.h"
 #include "logger.h"
+#include "app_settings.h"
+
 #include "gedcomx/parser.h"
 
 namespace fs = std::filesystem;
 
-App::App() : window_() {}
+App::App(const AppSettings& settings) : window_() {
+	window_.setPhysicsSettings(settings);
+}
 
 std::string App::projectFilePath() const {
 	if (!currentProject_) return "";
@@ -58,7 +62,8 @@ void App::openProject(const std::string& whoprojPath) {
 	currentProject_ = loaded;
 	db_ = std::make_unique<storage::Database>(projectFolder + "/" + currentProject_->dbFile);
 
-	neighbothoodDepth_ = currentProject_->settings.neighborhoodDepth;
+	neighborhoodDepth_ = currentProject_->settings.neighborhoodDepth;
+	maxVisibleNodes_ = currentProject_->settings.maxVisibleNodes;
 	currentRootKey_ = currentProject_->currentRootKey;
 
 	window_.setCameraState(currentProject_->cameraOffsetX, currentProject_->cameraOffsetY, currentProject_->cameraZoom);
@@ -66,7 +71,7 @@ void App::openProject(const std::string& whoprojPath) {
 	if (!currentRootKey_.empty()) {
 		auto rootPerson = db_->loadPerson(currentRootKey_);
 		if (rootPerson) {
-			loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+			loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 		}
 		else {
 			Logger::log(LogLevel::Error, "Saved root person no longer exists; starting with an empty view.\n");
@@ -85,7 +90,8 @@ void App::saveProject() {
 	currentProject_->cameraOffsetY = offset.y;
 	currentProject_->cameraZoom = window_.cameraZoom();
 
-	currentProject_->settings.neighborhoodDepth = neighbothoodDepth_;
+	currentProject_->settings.neighborhoodDepth = neighborhoodDepth_;
+	currentProject_->settings.maxVisibleNodes = maxVisibleNodes_;
 
 	std::ofstream out(projectFilePath());
 	out << serializeProject(*currentProject_);
@@ -203,7 +209,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 }
 
 void App::evictFarthestUntilUnderCap() {
-	if (visiblePeopleMap_.size() <= kMaxVisibleNodes) return;
+	if (visiblePeopleMap_.size() <= maxVisibleNodes_) return;
 
 	// BFS distance from the *current* root, over the union graph's edges -
 	// this reuses the exact same traversal shape as loadNeighborhood itself,
@@ -240,7 +246,7 @@ void App::evictFarthestUntilUnderCap() {
 			return da > db;  // farthest first
 		});
 
-	size_t toRemove = visiblePeopleMap_.size() - kMaxVisibleNodes;
+	size_t toRemove = visiblePeopleMap_.size() - maxVisibleNodes_;
 	for (size_t i = 0; i < toRemove; ++i) {
 		visiblePeopleMap_.erase(ids[i]);
 	}
@@ -271,6 +277,7 @@ void App::run() {
 		window_.renderTitleBarAndMenu();
 		window_.renderCanvas(visiblePeople_, visibleRelationships_);
 		window_.renderLogWindow();
+		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
 		window_.endFrame();
 		window_.setProjectOpen(currentProject_.has_value());
 
@@ -326,6 +333,19 @@ void App::run() {
 			}
 		}
 
+		if (auto newDepth = window_.consumeNeighborhoodDepthChange()) {
+			neighborhoodDepth_ = *newDepth;
+			if (!currentRootKey_.empty()) {
+				loadNeighborhood(currentRootKey_, neighborhoodDepth_);	// re-explore at the new depth
+			}
+		}
+
+		if (auto newMax = window_.consumeMaxVisibleNodesChange()) {
+			maxVisibleNodes_ = *newMax;
+			evictFarthestUntilUnderCap();  // apply the new cap immediately, in case it just got smaller
+			rebuildVisibleVectors();
+		}
+
 		if (window_.consumeSaveProjectRequest()) {
 			try {
 				saveProject();
@@ -335,13 +355,18 @@ void App::run() {
 			}
 		}
 
+		if (window_.consumeSaveSettingsRequest()) {
+			std::ofstream out("app_settings.json");
+			out << serializeAppSettings(window_.physicsSettings());
+		}
+
 		for (const auto& path : window_.consumeOpenedFiles()) {
 			try {
 				std::string newRoot = loadSourceFile(path);
 
 				if (!newRoot.empty()) {
 					currentRootKey_ = newRoot;
-					loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+					loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 				}
 			}
 			catch (const std::exception& e) {
@@ -353,7 +378,7 @@ void App::run() {
 		if (!requestedRoot.empty() && requestedRoot != currentRootKey_) {
 			try {
 				currentRootKey_ = requestedRoot;
-				loadNeighborhood(currentRootKey_, neighbothoodDepth_);
+				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load neighborhood: ") + e.what());

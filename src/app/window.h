@@ -17,6 +17,7 @@
 #include "gedcomx/fact.h"
 
 #include "camera.h"
+#include "app_settings.h"
 
 class Window {
 public:
@@ -60,6 +61,21 @@ public:
 	// Error Logging
 	void renderLogWindow();
 	void toggleLogWindow() { showLogWindow_ = !showLogWindow_; }
+
+	// Physics Settings
+	void setPhysicsSettings(const AppSettings& settings) { settings_ = settings; }
+	AppSettings physicsSettings() const { return settings_; }
+
+	// Settings Panel  
+	void renderSettingsPanel(int currentNeighborhoodDepth, size_t currentMaxVisibleNodes);
+	void toggleSettingsPanel() { showSettingsPanel_ = !showSettingsPanel_; }
+	bool consumeSaveSettingsRequest();
+
+	// Per-project settings: Window displayss current values (passed in each
+	// frame) and reports back if the user changed something - App owns the
+	// actual values and decides what to do with a change (e.g. re-root)
+	std::optional<int> consumeNeighborhoodDepthChange();
+	std::optional<size_t> consumeMaxVisibleNodesChange();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -122,4 +138,13 @@ private:
 	bool showSwitchConfirmModal_ = false;
 	std::function<void()> pendingSwitchAction_;  // what to do if the user confirms 
 	void renderSwitchConfirmModal();
+
+	// App settings
+	AppSettings settings_;
+	bool showSettingsPanel_ = false;
+	bool saveSettingsRequested_ = false;
+
+	// Per-project settings
+	std::optional<int> neighborhoodDepthChange_;
+	std::optional<size_t> maxVisibleNodesChange_;
 };

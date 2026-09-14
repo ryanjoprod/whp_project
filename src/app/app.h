@@ -12,7 +12,7 @@
 
 class App {
 public:
-	App();
+	explicit App(const AppSettings& settings);
 	void run();
 
 private:
@@ -29,7 +29,7 @@ private:
 
 	std::string projectFilePath() const;  // helper: projectFolder + "/" + projectName + ".whproj"
 
-	static constexpr size_t kMaxVisibleNodes = 200;  // this is how many people are visible on the screen at once
+	size_t maxVisibleNodes_ = 200;  // this is how many people are visible on the screen at once
 
 	std::unordered_map<std::string, gedcomx::Person> visiblePeopleMap_;
 	std::unordered_map<std::string, gedcomx::Relationship> visibleRelationshipsMap_;
@@ -38,7 +38,7 @@ private:
 	std::vector<gedcomx::Relationship> visibleRelationships_;
 
 	std::string currentRootKey_;
-	int neighbothoodDepth_ = 2;
+	int neighborhoodDepth_ = 2;
 	void loadNeighborhood(const std::string& rootPersonKey, int depth);
 
 	void rebuildVisibleVectors();

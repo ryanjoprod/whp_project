@@ -11,6 +11,7 @@ add_executable(app
 	camera.cpp
 	project.cpp
 	logger.cpp
+	app_settings.cpp
 )
 
 target_link_libraries(app PRIVATE storage SDL3::SDL3-shared imgui::imgui)

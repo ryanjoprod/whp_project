@@ -78,8 +78,8 @@ namespace storage {
 						bindText(s, 7, fact.place.original);
 						bindText(s, 8, fact.place.descriptionId);
 						bindText(s, 9, fact.value);
-						bindText(s, 10, person.conclusion.confidence);
-						bindText(s, 11, person.conclusion.lang);
+						bindText(s, 10, fact.conclusion.confidence);
+						bindText(s, 11, fact.conclusion.lang);
 					});
 
 				exec("DELETE FROM person_fact_sources WHERE person_fact_id = '" + factKey + "';");
@@ -210,7 +210,7 @@ namespace storage {
 
 			for (const auto& fact : rel.facts) {
 				std::string factKey = rowKey(relKey, fact.id);
-				upsert("INSERT INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+				upsert("INSERT OR REPLACE INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
 						bindText(s, 2, fact.id);
