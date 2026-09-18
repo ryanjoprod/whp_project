@@ -43,4 +43,6 @@ private:
 
 	void rebuildVisibleVectors();
 	void evictFarthestUntilUnderCap();
+
+	std::vector<gedcomx::SourceDescription> knownSources_;
 };

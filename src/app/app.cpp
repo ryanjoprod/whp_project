@@ -278,8 +278,9 @@ void App::run() {
 		window_.renderCanvas(visiblePeople_, visibleRelationships_);
 		window_.renderLogWindow();
 		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
-		window_.endFrame();
 		window_.setProjectOpen(currentProject_.has_value());
+		window_.renderCreationModals(knownSources_);
+		window_.endFrame();
 
 		auto newProjectReq = window_.consumeNewProjectRequest();
 		if (newProjectReq) {
@@ -382,6 +383,29 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load neighborhood: ") + e.what());
+			}
+		}
+
+		if (auto newSource = window_.consumeNewSourceRequest()) {
+			try {
+				db_->save(*newSource);
+				knownSources_.push_back(*newSource);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to create source: ") + e.what());
+			}
+		}
+
+		if (auto newPerson = window_.consumeNewPersonRequest()) {
+			try {
+				std::string sourceId = newPerson->sourceId;
+				db_->save(*newPerson, sourceId);
+				currentRootKey_ = sourceId + ":" + newPerson->id;
+				// fix id generation
+				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to create person: ") + e.what());
 			}
 		}
 	}

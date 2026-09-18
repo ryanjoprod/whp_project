@@ -15,6 +15,7 @@
 #include "gedcomx/person.h"
 #include "gedcomx/relationship.h"
 #include "gedcomx/fact.h"
+#include "gedcomx/source_description.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -76,6 +77,14 @@ public:
 	// actual values and decides what to do with a change (e.g. re-root)
 	std::optional<int> consumeNeighborhoodDepthChange();
 	std::optional<size_t> consumeMaxVisibleNodesChange();
+
+	// Modal window methods
+	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void requestNewPersonModal() { showNewPersonModal_ = true; }
+
+	// Modal window state
+	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
+	std::optional<gedcomx::Person> consumeNewPersonRequest();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -147,4 +156,19 @@ private:
 	// Per-project settings
 	std::optional<int> neighborhoodDepthChange_;
 	std::optional<size_t> maxVisibleNodesChange_;
+
+	// Modal window stuff
+	bool showNewSourceModal_ = false;
+	std::string pendingAutoSelectSourceId_;
+	char newSourceTitleBuffer_[256] = "";
+	std::optional<gedcomx::SourceDescription> newSourceResult_;
+
+	bool showNewPersonModal_ = false;
+	char newPersonGiveNameBuffer_[128] = "";
+	char newPersonSurnameBuffer_[128] = "";
+	int selectedSourceIndex_ = -1;
+	std::optional<gedcomx::Person> newPersonResult_;
+
+	void renderNewSourceModal();
+	void renderNewPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
 };
