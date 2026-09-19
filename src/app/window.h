@@ -81,10 +81,17 @@ public:
 	// Modal window methods
 	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestNewPersonModal() { showNewPersonModal_ = true; }
+	void requestNewRelationshipModal() { showNewRelationshipModal_ = true; }
 
 	// Modal window state
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
 	std::optional<gedcomx::Person> consumeNewPersonRequest();
+	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeNewRelationshipRequest();
+
+	// Window need to ask App to search storage - same request/consume shape
+	// but this one needs a return value each frame, not just a fire-and-forget.
+	std::optional<std::pair<std::string, std::string>> consumePersonSearchQuery(int pickerIndex);
+	void setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results);
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -157,18 +164,34 @@ private:
 	std::optional<int> neighborhoodDepthChange_;
 	std::optional<size_t> maxVisibleNodesChange_;
 
-	// Modal window stuff
+	// Modal window stuff 
+	void renderNewSourceModal();
+	void renderNewPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderNewRelationshipModal();
+
+	// Source Modal state
 	bool showNewSourceModal_ = false;
 	std::string pendingAutoSelectSourceId_;
 	char newSourceTitleBuffer_[256] = "";
 	std::optional<gedcomx::SourceDescription> newSourceResult_;
 
+	// Person Modal state
 	bool showNewPersonModal_ = false;
 	char newPersonGiveNameBuffer_[128] = "";
 	char newPersonSurnameBuffer_[128] = "";
 	int selectedSourceIndex_ = -1;
 	std::optional<gedcomx::Person> newPersonResult_;
 
-	void renderNewSourceModal();
-	void renderNewPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
+	// Relationship Modal state
+	bool showNewRelationshipModal_ = false;
+	char personSearchBuffer_[2][128] = { "", "" };  // [0] = person1, [1] = person2
+	std::vector<gedcomx::Person> personSearchResults_[2];
+	int selectedPersonIndex_[2] = { -1, -1 };
+	std::optional<std::string> pendingSearchQuery_[2];
+	std::string relationshipSourceId_;  // set once Person 1 is picked; scopes Person 2's search 
+
+	// Relationship Type Modal state
+	char relationshiptypeCustomBuffer_[128] = "";
+	int selectedRelationshipTypeIndex_ = 0;
+	std::optional<std::pair<gedcomx::Relationship, std::string>> newRelationshipResult_;
 };

@@ -105,6 +105,7 @@ void App::closeCurrentProject() {
 	visiblePeople_.clear();
 	visibleRelationships_.clear();
 	currentRootKey_.clear();
+	knownSources_.clear();
 }
 
 void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {						
@@ -406,6 +407,35 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to create person: ") + e.what());
+			}
+		}
+
+		for (int p = 0; p < 2; ++p) {
+			if (auto searchReq = window_.consumePersonSearchQuery(p)) {
+				try {
+					const std::string& query = searchReq->first;
+					const std::string& sourceFilter = searchReq->second;
+					auto results = query.empty() ? std::vector<gedcomx::Person>{} : db_->searchPersonsByName(query, sourceFilter);
+					window_.setPersonSearchResults(p, results);
+				}
+				catch (const std::exception& e) {
+					Logger::log(LogLevel::Error, std::string("Person search failed: ") + e.what());
+				}
+			}
+		}
+
+		if (auto newRelationship = window_.consumeNewRelationshipRequest()) {
+			try {
+				const gedcomx::Relationship& rel = newRelationship->first;
+				const std::string& sourceId = newRelationship->second;
+				db_->save(rel, sourceId);
+
+				if (!currentRootKey_.empty()) {
+					loadNeighborhood(currentRootKey_, neighborhoodDepth_);  // refresh to pick up the new edge
+				}
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to create relationship: ") + e.what());
 			}
 		}
 	}

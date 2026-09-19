@@ -104,17 +104,18 @@ namespace storage {
 
 			// One query per person is simple to reason about; a single join
 			// would be faster but harder to read at this stage of the project.
-			query("SELECT row_key, local_id, confidence, lang FROM persons;",
+			query("SELECT row_key, local_id, source_id, confidence, lang FROM persons;",
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string localId = columnText(s, 1);
 
 					gedcomx::Person person;
 					person.id = key;
+					person.sourceId = columnText(s, 2);
 					person.names = loadNamesFor(key);
 					person.facts = loadFactsForPerson(key);
-					person.conclusion.confidence = columnText(s, 2);
-					person.conclusion.lang = columnText(s, 3);
+					person.conclusion.confidence = columnText(s, 3);
+					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
 
 					people[key] = std::move(person);
@@ -172,17 +173,18 @@ namespace storage {
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
 			std::optional<gedcomx::Person> result;
 
-			query("SELECT row_key, local_id, confidence, lang FROM persons WHERE row_key = '" + personKey + "';",
+			query("SELECT row_key, local_id, source_id, confidence, lang FROM persons WHERE row_key = '" + personKey + "';",
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string local_id = columnText(s, 1);
 
 					gedcomx::Person person;
 					person.id = key;
+					person.sourceId = columnText(s, 2);
 					person.names = loadNamesFor(key);
 					person.facts = loadFactsForPerson(key);
-					person.conclusion.confidence = columnText(s, 2);
-					person.conclusion.lang = columnText(s, 3);
+					person.conclusion.confidence = columnText(s, 3);
+					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
 
 					result = person;
@@ -544,6 +546,44 @@ namespace storage {
 			return results;
 		}
 
+		std::vector<gedcomx::Person> searchPersonsByName(const std::string& query, const std::string& sourceIdFilter, int limit) {
+			std::vector<gedcomx::Person> results;
+			std::vector<std::string> matchedKeys;
+
+			// Find distinct person row_keys whose full_text matches, via the existing
+			// names -> name_forms chain, capped before doing the more expensive
+			// full loadPerson() reconstruction for each hit.
+			std::string sql =
+				"SELECT DISTINCT persons.row_key FROM persons "
+				"JOIN names ON names.person_id = persons.row_key "
+				"JOIN name_forms ON name_forms.name_id = names.id "
+				"WHERE name_forms.full_text LIKE ?";
+			if (!sourceIdFilter.empty()) sql += " AND persons.source_id = ?";
+			sql += " LIMIT ?;";
+
+			sqlite3_stmt* stmt = nullptr;
+			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+				throw std::runtime_error("Faled to prepare search query: " + std::string(sqlite3_errmsg(db_)));
+
+			std::string pattern = "%" + query + "%";
+			int idx = 1;
+			sqlite3_bind_text(stmt, idx++, pattern.c_str(), -1, SQLITE_TRANSIENT);
+			if (!sourceIdFilter.empty()) sqlite3_bind_text(stmt, idx++, sourceIdFilter.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_int(stmt, idx++, limit);
+
+			while (sqlite3_step(stmt) == SQLITE_ROW) {
+				matchedKeys.push_back(columnText(stmt, 0));
+			}
+			sqlite3_finalize(stmt);
+
+			for (const auto& key : matchedKeys) {
+				auto person = loadPerson(key);
+				if (person) results.push_back(std::move(*person));
+			}
+
+			return results;
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 
@@ -701,6 +741,7 @@ namespace storage {
 
 			return notes;
 		}
+
 	};
 
 	// --- Database: thin forward wrapper around Impl ---
@@ -780,5 +821,9 @@ namespace storage {
 
 	std::vector<gedcomx::PlaceDescription> Database::loadAllPlaces() {
 		return impl_->loadAllPlaces();
+	}
+
+	std::vector<gedcomx::Person> Database::searchPersonsByName(const std::string& query, const std::string& sourceIdFilter, int limit) {
+		return impl_->searchPersonsByName(query, sourceIdFilter, limit);
 	}
 };

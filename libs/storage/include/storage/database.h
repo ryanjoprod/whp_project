@@ -70,6 +70,9 @@ namespace storage {
 		void save(const gedcomx::PlaceDescription& place);
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces();
 
+		// Requests methods
+		std::vector<gedcomx::Person> searchPersonsByName(const std::string& query, const std::string& sourceIdFilter = "", int limit = 20);
+
 	private:
 		class Impl;
 		std::unique_ptr<Impl> impl_;
