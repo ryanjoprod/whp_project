@@ -87,6 +87,7 @@ public:
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
 	std::optional<gedcomx::Person> consumeNewPersonRequest();
 	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeNewRelationshipRequest();
+	std::optional<std::pair<gedcomx::Person, std::string>> consumeNewFactRequest();
 
 	// Window need to ask App to search storage - same request/consume shape
 	// but this one needs a return value each frame, not just a fire-and-forget.
@@ -194,4 +195,12 @@ private:
 	char relationshiptypeCustomBuffer_[128] = "";
 	int selectedRelationshipTypeIndex_ = 0;
 	std::optional<std::pair<gedcomx::Relationship, std::string>> newRelationshipResult_;
+
+	// Fact Modal state
+	bool showAddFactForm_ = false;
+	char newFactDateBuffer_[64] = "";
+	char newFactPlaceBuffer_[128] = "";
+	char newFactTypeCustomBuffer_[128] = "";
+	int selectedFactTypeIndex_ = 0;
+	std::optional<std::pair<gedcomx::Person, std::string>> newFactResult_;
 };

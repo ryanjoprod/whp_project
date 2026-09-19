@@ -62,6 +62,8 @@ void App::openProject(const std::string& whoprojPath) {
 	currentProject_ = loaded;
 	db_ = std::make_unique<storage::Database>(projectFolder + "/" + currentProject_->dbFile);
 
+	knownSources_ = db_->loadAllSourceDescriptions();
+
 	neighborhoodDepth_ = currentProject_->settings.neighborhoodDepth;
 	maxVisibleNodes_ = currentProject_->settings.maxVisibleNodes;
 	currentRootKey_ = currentProject_->currentRootKey;
@@ -407,6 +409,21 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to create person: ") + e.what());
+			}
+		}
+
+		if (auto newFact = window_.consumeNewFactRequest()) {
+			try {
+				const gedcomx::Person& person = newFact->first;
+				const std::string& sourceId = newFact->second;
+				db_->save(person, sourceId);
+
+				if (!currentRootKey_.empty()) {
+					loadNeighborhood(currentRootKey_, neighborhoodDepth_);  // refresh so the panel shows the new fact
+				}
+			}
+			catch (std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to add fact: ") + e.what());
 			}
 		}
 
