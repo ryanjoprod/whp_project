@@ -455,5 +455,39 @@ void App::run() {
 				Logger::log(LogLevel::Error, std::string("Failed to create relationship: ") + e.what());
 			}
 		}
+	
+		if (auto exportSourceId = window_.consumeExportSourceRequest()) {
+			pendingExportSourceId_ = *exportSourceId;
+
+			auto it = std::find_if(knownSources_.begin(), knownSources_.end(),
+				[&](const gedcomx::SourceDescription& s) {
+					return s.id == *exportSourceId;
+				});
+			std::string suggestedName = (it != knownSources_.end() ? it->primaryTitle() : *exportSourceId) + ".json";
+
+			window_.requestExportSaveDialog(suggestedName);
+		}
+
+		if (auto savePath = window_.consumeExportSavePath()) {
+			try {
+				auto it = std::find_if(knownSources_.begin(), knownSources_.end(),
+					[&](const gedcomx::SourceDescription& s) {
+						return s.id == pendingExportSourceId_;
+					});
+				if (it == knownSources_.end()) {
+					Logger::log(LogLevel::Error, "Export failed: source no longer known.");
+				}
+				else {
+					auto exportData = db_->gatherSourceExport(pendingExportSourceId_);
+					nlohmann::json doc = gedcomx::serializeSourceExport(*it, exportData.persons, exportData.relationships);
+
+					std::ofstream out(*savePath);
+					out << doc.dump(2);
+				}
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Export failed: ") + e.what());
+			}
+		}
 	}
 }

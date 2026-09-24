@@ -247,19 +247,7 @@ namespace storage {
 
 			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM relationships WHERE person1_id ='" + personKey + "' OR person2_id = '" + personKey + "';",
 				[&](sqlite3_stmt* s) {
-					std::string relKey = columnText(s, 0);
-
-					gedcomx::Relationship rel;
-					rel.id = columnText(s, 1);
-					rel.type = columnText(s, 3);
-					rel.person1Id = columnText(s, 4);
-					rel.person2Id = columnText(s, 5);
-					rel.facts = loadFactsForRelationship(relKey);
-					rel.conclusion.confidence = columnText(s, 6);
-					rel.conclusion.lang = columnText(s, 7);
-					rel.conclusion.notes = loadNotesFor("relationship_notes", "relationship_id", relKey);
-
-					results.push_back(std::move(rel));
+					results.push_back(loadRelationshipRow(s));
 				});
 
 			return results;
@@ -584,6 +572,29 @@ namespace storage {
 			return results;
 		}
 
+		SourceExport gatherSourceExport(const std::string& sourceId) {
+			SourceExport result;
+
+			query("SELECT row_key FROM persons WHERE source_id = '" + sourceId + "';",
+				[&](sqlite3_stmt* s) {
+					auto person = loadPerson(columnText(s, 0));
+					if (person) {
+						person->id = stripRowKeyPrefix(person->id, sourceId);
+						result.persons.push_back(std::move(*person));
+					}
+			});
+
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM  relationships WHERE source_id = '" + sourceId + "';",
+				[&](sqlite3_stmt* s) {
+					gedcomx::Relationship rel = loadRelationshipRow(s);
+					rel.person1Id = stripRowKeyPrefix(rel.person1Id, sourceId);
+					rel.person2Id = stripRowKeyPrefix(rel.person2Id, sourceId);
+					result.relationships.push_back(std::move(rel));
+				});
+
+			return result;
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 
@@ -742,6 +753,21 @@ namespace storage {
 			return notes;
 		}
 
+		gedcomx::Relationship loadRelationshipRow(sqlite3_stmt* s) {
+			std::string relKey = columnText(s, 0);
+
+			gedcomx::Relationship rel;
+			rel.id = columnText(s, 1);
+			rel.type = columnText(s, 3);
+			rel.person1Id = columnText(s, 4);
+			rel.person2Id = columnText(s, 5);
+			rel.facts = loadFactsForRelationship(relKey);
+			rel.conclusion.confidence = columnText(s, 6);
+			rel.conclusion.lang = columnText(s, 7);
+			rel.conclusion.notes = loadNotesFor("relationship_notes", "relationship_id", relKey);
+			
+			return rel;
+		}
 	};
 
 	// --- Database: thin forward wrapper around Impl ---
@@ -825,5 +851,13 @@ namespace storage {
 
 	std::vector<gedcomx::Person> Database::searchPersonsByName(const std::string& query, const std::string& sourceIdFilter, int limit) {
 		return impl_->searchPersonsByName(query, sourceIdFilter, limit);
+	}
+
+	storage::SourceExport Database::gatherSourceExport(const std::string& sourceId) {
+		return impl_->gatherSourceExport(sourceId);
+	}
+
+	std::string stripRowKeyPrefix(const std::string& rowKey, const std::string& sourceId) {
+		return rowKey.substr(sourceId.size() + 1);
 	}
 };

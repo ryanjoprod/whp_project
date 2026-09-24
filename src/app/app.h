@@ -45,4 +45,6 @@ private:
 	void evictFarthestUntilUnderCap();
 
 	std::vector<gedcomx::SourceDescription> knownSources_;
+
+	std::string pendingExportSourceId_;
 };

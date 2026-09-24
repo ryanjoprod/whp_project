@@ -347,4 +347,160 @@ namespace gedcomx {
 
 		return places;
 	}
+
+	// --- Serializers ---
+
+	nlohmann::json serializeConclusion(const gedcomx::Conclusion& conclusion) {
+		nlohmann::json j;
+		if (!conclusion.confidence.empty()) j["confidence"] = conclusion.confidence;
+		if (!conclusion.lang.empty()) j["lang"] = conclusion.lang;
+
+		if (!conclusion.sources.empty()) {
+			nlohmann::json sources = nlohmann::json::array();
+			for (const auto& src : conclusion.sources) {
+				sources.push_back({ {"description", {{"resource", "#" + src.sourceDescriptionId}}} });
+			}
+			j["sources"] = sources;
+		}
+
+		if (!conclusion.notes.empty()) {
+			nlohmann::json notes = nlohmann::json::array();
+			for (const auto& note : conclusion.notes) {
+				nlohmann::json n;
+				if (!note.lang.empty()) n["lang"] = note.lang;
+				if (!note.subject.empty()) n["subject"] = note.subject;
+				n["text"] = note.text;
+				notes.push_back(n);
+			}
+			j["notes"] = notes;
+		}
+
+		return j;
+	}
+
+	nlohmann::json serializeFact(const gedcomx::Fact& fact) {
+		nlohmann::json j = serializeConclusion(fact.conclusion);
+		j["id"] = fact.id;
+		j["type"] = fact.type;
+
+		if (!fact.date.original.empty() || !fact.date.formal.empty()) {
+			nlohmann::json date;
+			if (!fact.date.original.empty()) date["original"] = fact.date.original;
+			if (!fact.date.formal.empty()) date["formal"] = fact.date.formal;
+			j["date"] = date;
+		}
+
+		if (!fact.place.original.empty() || !fact.place.descriptionId.empty()) {
+			nlohmann::json place;
+			if (!fact.place.original.empty()) place["original"] = fact.place.original;
+			if (!fact.place.descriptionId.empty()) {
+				place["description"] = { {"resource", "#" + fact.place.descriptionId} };
+			}
+			j["place"] = place;
+		}
+
+		if (!fact.value.empty()) j["value"] = fact.value;
+
+		return j;
+	}
+
+	nlohmann::json serializePerson(const gedcomx::Person& person) {
+		nlohmann::json j = serializeConclusion(person.conclusion);
+		j["id"] = person.id;
+
+		if (!person.names.empty()) {
+			nlohmann::json names = nlohmann::json::array();
+			for (const auto& name : person.names) {
+				nlohmann::json nameForms = nlohmann::json::array();
+				for (const auto& form : name.nameForms) {
+					nlohmann::json formJson;
+					if (!form.fullText.empty()) formJson["fullText"] = form.fullText;
+
+					if (!form.parts.empty()) {
+						nlohmann::json parts = nlohmann::json::array();
+						for (const auto& part : form.parts) {
+							parts.push_back({ {"value", part.value}, {"type", part.type} });
+						}
+						formJson["parts"] = parts;
+					}
+					nameForms.push_back(formJson);
+				}
+				names.push_back({ {"nameForms", nameForms} });
+			}
+			j["names"] = names;
+		}
+
+		if (!person.facts.empty()) {
+			nlohmann::json facts = nlohmann::json::array();
+			for (const auto& fact : person.facts) {
+				facts.push_back(serializeFact(fact));
+			}
+			j["facts"] = facts;
+		}
+
+		return j;
+	}
+
+	nlohmann::json serializeRelationship(const gedcomx::Relationship& rel) {
+		nlohmann::json j = serializeConclusion(rel.conclusion);
+		j["id"] = rel.id;
+		j["type"] = rel.type;
+		j["person1"] = { {"resource", "#" + rel.person1Id} };
+		j["person2"] = { {"resource", "#" + rel.person2Id} };
+
+		if (!rel.facts.empty()) {
+			nlohmann::json facts = nlohmann::json::array();
+			for (const auto& fact : rel.facts) {
+				facts.push_back(serializeFact(fact));
+			}
+			j["facts"] = facts;
+		}
+
+		return j;
+	}
+
+	nlohmann::json serializeSourceDescription(const gedcomx::SourceDescription& source) {
+		nlohmann::json j;
+		j["id"] = source.id;
+
+		if (!source.titles.empty()) {
+			nlohmann::json titles = nlohmann::json::array();
+			for (const auto& t : source.titles) {
+				nlohmann::json tj;
+				if (!t.lang.empty()) tj["lang"] = t.lang;
+				tj["value"] = t.value;
+				titles.push_back(tj);
+			}
+			j["titles"] = titles;
+		}
+
+		if (!source.citations.empty()) {
+			nlohmann::json citations = nlohmann::json::array();
+			for (const auto& c : source.citations) {
+				nlohmann::json cj;
+				if (!c.lang.empty()) cj["lang"] = c.lang;
+				cj["value"] = c.value;
+				citations.push_back(cj);
+			}
+			j["citations"] = citations;
+		}
+
+		return j;
+	}
+
+	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source, const std::vector<gedcomx::Person>& persons, const std::vector<gedcomx::Relationship>& relationships) {
+		nlohmann::json doc;
+
+		doc["sourceDescriptions"] = nlohmann::json::array({ serializeSourceDescription(source) });
+
+		nlohmann::json personsJson = nlohmann::json::array();
+		for (const auto& p : persons) personsJson.push_back(serializePerson(p));
+		doc["persons"] = personsJson;
+
+		nlohmann::json relsJson = nlohmann::json::array();
+		for (const auto& r : relationships) relsJson.push_back(serializeRelationship(r));
+		doc["relationships"] = relsJson;
+
+		return doc;
+	}
 }

@@ -14,6 +14,12 @@
 #include "gedcomx/place_description.h"
 
 namespace storage {
+	// Strips a known sourceId prefix off a row-key to recover the bare local id
+	// (e.g. stripRowKeyPrefix("S1:P1", "S1") -> "P1"). Used anywhere a Person's
+	// or Relationship's row-key needs converting back to its original GEDCOM X
+	// local id - for creating new relationships/facts, or exporting data.
+	std::string stripRowKeyPrefix(const std::string& rowKey, const std::string& sourceId);
+
 	struct PersonRef {
 		std::string sourceId;
 		std::string localId;
@@ -31,6 +37,11 @@ namespace storage {
 
 			return "";
 		}
+	};
+
+	struct SourceExport {
+		std::vector<gedcomx::Person> persons;
+		std::vector<gedcomx::Relationship> relationships;
 	};
 
 	class Database {
@@ -72,6 +83,9 @@ namespace storage {
 
 		// Requests methods
 		std::vector<gedcomx::Person> searchPersonsByName(const std::string& query, const std::string& sourceIdFilter = "", int limit = 20);
+
+		// Exports
+		SourceExport gatherSourceExport(const std::string& sourceId);
 
 	private:
 		class Impl;

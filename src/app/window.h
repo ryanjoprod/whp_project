@@ -82,12 +82,17 @@ public:
 	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestNewPersonModal() { showNewPersonModal_ = true; }
 	void requestNewRelationshipModal() { showNewRelationshipModal_ = true; }
+	void renderExportModal(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void requestExportModal() { showExportModal_ = true; }
+	void requestExportSaveDialog(const std::string& suggestedFileName);
 
 	// Modal window state
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
 	std::optional<gedcomx::Person> consumeNewPersonRequest();
 	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeNewRelationshipRequest();
 	std::optional<std::pair<gedcomx::Person, std::string>> consumeNewFactRequest();
+	std::optional<std::string> consumeExportSourceRequest();
+	std::optional<std::string> consumeExportSavePath();
 
 	// Window need to ask App to search storage - same request/consume shape
 	// but this one needs a return value each frame, not just a fire-and-forget.
@@ -203,4 +208,13 @@ private:
 	char newFactTypeCustomBuffer_[128] = "";
 	int selectedFactTypeIndex_ = 0;
 	std::optional<std::pair<gedcomx::Person, std::string>> newFactResult_;
+
+	// Export Modal
+	bool showExportModal_ = false;
+	int selectedExportSourceIndex_ = -1;
+	std::optional<std::string> exportSourceResult_;
+	std::mutex exportSaveMutex_;
+	std::optional<std::string> pendingExportSavePath_;
+	std::string pendingExportSourceId_;  // which source the sae dialog is for
+	static void handleExportSaveDialogResult(void* userdata, const char* const* filelist, int filter);
 };

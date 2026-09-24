@@ -40,4 +40,13 @@ namespace gedcomx {
 
 	PlaceDescription parsePlaceDescription(const nlohmann::json& j);
 	std::vector<PlaceDescription> parsePlaceDescriptions(const nlohmann::json& document);
+
+	// --- Serializers ---
+
+	nlohmann::json serializeConclusion(const gedcomx::Conclusion& conclusion);
+	nlohmann::json serializeFact(const gedcomx::Fact& fact);
+	nlohmann::json serializePerson(const gedcomx::Person& person);
+	nlohmann::json serializeRelationship(const gedcomx::Relationship& rel);
+	nlohmann::json serializeSourceDescription(const gedcomx::SourceDescription& source);
+	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source, const std::vector<gedcomx::Person>& persons, const std::vector<gedcomx::Relationship>& relationships);
 }
