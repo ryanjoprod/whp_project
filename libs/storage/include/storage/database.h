@@ -59,9 +59,11 @@ namespace storage {
 
 		void save(const gedcomx::Person& person, const std::string& sourceId);
 		std::vector<gedcomx::Person> loadAll();
+		std::optional<gedcomx::Person> loadPerson(const std::string& personKey);
 		void linkPersons(const std::string& aggregateId, const std::vector<PersonRef>& refs);
 		std::vector<AggregatePerson> loadAggregatePersons();
-		std::optional<gedcomx::Person> loadPerson(const std::string& personKey);
+		std::optional<std::string> getAggregateIdForPerson(const std::string& personKey);
+		bool areSamePerson(const std::string& personKeyA, const std::string& personKeyB);
 
 		void save(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey);

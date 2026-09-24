@@ -9,7 +9,7 @@
 #include "app.h"
 #include "logger.h"
 #include "app_settings.h"
-
+#include "id_generator.h"
 #include "gedcomx/parser.h"
 
 namespace fs = std::filesystem;
@@ -271,6 +271,89 @@ void App::rebuildVisibleVectors() {
 
 	visibleRelationships_.clear();
 	for (const auto& [id, rel] : visibleRelationshipsMap_) visibleRelationships_.push_back(rel);
+
+	aggregateViewDirty_ = true;  // whatever the toggle shows next needs recomputing
+}
+
+void App::rebuildAggregateView() {
+	aggregateVisiblePeople_.clear();
+	aggregateVisibleRelationships_.clear();
+
+	if (!db_) {
+		aggregateViewDirty_ = false;
+		return;
+	}
+
+	// Resolve each currently visible person's "group identity": their
+	// aggregate_id if manually linked, or their own row-key if not linked
+	// (an unlinked person is treated as a singleton group of one).
+	std::unordered_map<std::string, std::string> personToIdentity;
+	std::unordered_map<std::string, std::string> identityToRepresentative;
+	std::unordered_map<std::string, std::vector<gedcomx::Person>> identityGroups;
+
+	for (const auto& person : visiblePeople_) {
+		std::string identity;
+
+		try {
+			auto aggId = db_->getAggregateIdForPerson(person.id);
+			identity = aggId ? *aggId : person.id;
+		}
+		catch (const std::exception& e) {
+			Logger::log(LogLevel::Error, std::string("Failed to resolve aggregate identity: ") + e.what());
+			identity = person.id;
+		}
+
+		personToIdentity[person.id] = identity;
+		identityGroups[identity].push_back(person);
+
+		// First memeber seen for a group becomes its representative - its
+		// real row-key becomes the merged node's id, so re-rooting/"Explore
+		// from here" keeps working normally on a merged mode.
+		if (identityToRepresentative.find(identity) == identityToRepresentative.end()) {
+			identityToRepresentative[identity] = person.id;
+		}
+	}
+
+	for (const auto& [identity, members] : identityGroups) {
+		gedcomx::Person merged;
+		merged.id = identityToRepresentative[identity];
+		merged.sourceId = members[0].sourceId;  // display-only; a merged node may span sources
+
+		for (const auto& m : members) {
+			merged.names.insert(merged.names.end(), m.names.begin(), m.names.end());
+			merged.facts.insert(merged.facts.end(), m.facts.begin(), m.facts.end());
+		}
+
+		aggregateVisiblePeople_.push_back(std::move(merged));
+	}
+
+	// Resolve edges: a relationship between two persons who now share a
+	// merged identity is internal to that merge and gets droppped; edges
+	// between different identities are kept, remapped onto each identity's
+	// representative id, and de-duplicated (two source relationships could
+	// both connect the same pair of now-merged people).
+	std::set<std::pair<std::string, std::string>> seenPairs;
+	for (const auto& rel : visibleRelationships_) {
+		auto it1 = personToIdentity.find(rel.person1Id);
+		auto it2 = personToIdentity.find(rel.person2Id);
+		if (it1 == personToIdentity.end() || it2 == personToIdentity.end()) continue;
+		if (it1->second == it2->second) continue;  // same merged group - skip
+
+		std::string rep1 = identityToRepresentative[it1->second];
+		std::string rep2 = identityToRepresentative[it2->second];
+
+		auto pairKey = rep1 < rep2 ? std::make_pair(rep1, rep2) : std::make_pair(rep2, rep1);
+		if (!seenPairs.insert(pairKey).second) continue;
+
+		gedcomx::Relationship aggRel;
+		aggRel.id = rel.id;
+		aggRel.type = rel.type;
+		aggRel.person1Id = rel.person1Id;
+		aggRel.person2Id = rel.person2Id;
+		aggregateVisibleRelationships_.push_back(std::move(aggRel));
+	}
+
+	aggregateViewDirty_ = false;
 }
 
 void App::run() {
@@ -278,7 +361,13 @@ void App::run() {
 		window_.processEvents();
 		window_.beginFrame();
 		window_.renderTitleBarAndMenu();
-		window_.renderCanvas(visiblePeople_, visibleRelationships_);
+		if (window_.aggregateViewEnabled()) {
+			if (aggregateViewDirty_) rebuildAggregateView();
+			window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_);
+		}
+		else {
+			window_.renderCanvas(visiblePeople_, visibleRelationships_);
+		}
 		window_.renderLogWindow();
 		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
 		window_.setProjectOpen(currentProject_.has_value());
@@ -487,6 +576,48 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Export failed: ") + e.what());
+			}
+		}
+
+		if (auto linkQuery = window_.consumeLinkSearchQuery()) {
+			try {
+				auto results = linkQuery->empty() ? std::vector<gedcomx::Person>{} : db_->searchPersonsByName(*linkQuery);
+				window_.setLinkSearchResults(results);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Person search failed: ") + e.what());
+			}
+		}
+
+		if (auto linkReq = window_.consumeLinkPersonRequest()) {
+			try {
+				const std::string& personA = linkReq->first;
+				const std::string& personB = linkReq->second;
+
+				// Decide the aggregate id: reuse one side's existing group if it
+				// has one, otherwise the other side's, otherwise mint a new one.
+				auto existingA = db_->getAggregateIdForPerson(personA);
+				auto existingB = db_->getAggregateIdForPerson(personB);
+
+				std::string aggregateId;
+				if (existingA) aggregateId = *existingA;
+				else if (existingB) aggregateId = *existingB;
+				else aggregateId = idgen::generateLocalId("AGG_");
+
+				// Parse each row-key back into (sourceId, localId) for linkPersons'
+				// expected shape.
+				auto splitRowKey = [](const std::string& rowKey) {
+					size_t colon = rowKey.find(':');
+					return std::make_pair(rowKey.substr(0, colon), rowKey.substr(colon + 1));
+				};
+				auto [sourceA, localA] = splitRowKey(personA);
+				auto [sourceB, localB] = splitRowKey(personB);
+
+				db_->linkPersons(aggregateId, { {sourceA, localA}, {sourceB, localB} });
+				aggregateViewDirty_ = true;
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to link persons: ") + e.what());
 			}
 		}
 	}

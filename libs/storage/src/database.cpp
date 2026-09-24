@@ -170,6 +170,16 @@ namespace storage {
 			return results;
 		}
 
+		std::optional<std::string> getAggregateIdForPerson(const std::string& personKey) {
+			std::optional<std::string> result;
+			query("SELECT aggregate_id FROM person_links WHERE person_id = '" + personKey + "';",
+				[&](sqlite3_stmt* s) {
+					result = columnText(s, 0);
+				});
+
+			return result;
+		}
+
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
 			std::optional<gedcomx::Person> result;
 
@@ -859,5 +869,9 @@ namespace storage {
 
 	std::string stripRowKeyPrefix(const std::string& rowKey, const std::string& sourceId) {
 		return rowKey.substr(sourceId.size() + 1);
+	}
+
+	std::optional<std::string> Database::getAggregateIdForPerson(const std::string& personKey) {
+		return impl_->getAggregateIdForPerson(personKey);
 	}
 };

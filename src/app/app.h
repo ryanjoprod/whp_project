@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <set>
 
 #include "window.h"
 #include "project.h"
@@ -47,4 +48,10 @@ private:
 	std::vector<gedcomx::SourceDescription> knownSources_;
 
 	std::string pendingExportSourceId_;
+
+	// Aggregate layer
+	bool aggregateViewDirty_ = true;
+	std::vector<gedcomx::Person> aggregateVisiblePeople_;
+	std::vector<gedcomx::Relationship> aggregateVisibleRelationships_;
+	void rebuildAggregateView();
 };

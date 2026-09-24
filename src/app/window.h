@@ -99,12 +99,38 @@ public:
 	std::optional<std::pair<std::string, std::string>> consumePersonSearchQuery(int pickerIndex);
 	void setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results);
 
+	// Aggregate layer toggle
+	bool aggregateViewEnabled() const { return aggregateViewEnabled_; }
+	void requestLinkPersonModal(const std::string& personRowKey) {
+		showLinkPersonModal_ = true;
+		linkSourcePersonKey_ = personRowKey;
+	}
+	std::optional<std::pair<std::string, std::string>> consumeLinkPersonRequest();  // (personA, personB)
+	void renderLinkPersonModal();
+	std::optional<std::string> consumeLinkSearchQuery();
+	void setLinkSearchResults(const std::vector<gedcomx::Person>& results);
+
 private:
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
 	bool running_ = true;
 	bool showLogWindow_ = false;
 	static constexpr float kTitleBarHeight = 32.0f;
+
+	// Draws a list of Selectable rows, giving each a unique ImGui ID via
+	// "displayText##uniqueId" so items with identical display text (e.g.
+	// two people both named "Adam") don't collide - see ImGui's ID-stack
+	// rules. getDisplay/getId are called once per item, per frame.
+	template <typename T>
+	void renderSelectableList(const std::vector<T>& items, int* selectedIndex, const std::function<std::string(const T&)>& getDisplay, const std::function<std::string(const T&)> getId) {
+		for (int i = 0; i < (int)items.size(); ++i) {
+			bool isSelected = (i == *selectedIndex);
+			std::string label = getDisplay(items[i]) + "##" + getId(items[i]);
+			if (ImGui::Selectable(label.c_str(), isSelected)) {
+				*selectedIndex = i;
+			}
+		}
+	}
 
 	// Window movement and position
 	bool draggingWindow_ = false;
@@ -217,4 +243,14 @@ private:
 	std::optional<std::string> pendingExportSavePath_;
 	std::string pendingExportSourceId_;  // which source the sae dialog is for
 	static void handleExportSaveDialogResult(void* userdata, const char* const* filelist, int filter);
+
+	// Aggregate Layer state
+	bool aggregateViewEnabled_ = false;
+	bool showLinkPersonModal_ = false;
+	std::string linkSourcePersonKey_;
+	char linkSearchBuffer_[128] = "";
+	std::vector<gedcomx::Person> linkSearchResults_;
+	int selectedLinkIndex_ = -1;
+	std::optional<std::string> pendingLinkSearchQuery_;
+	std::optional<std::pair<std::string, std::string>> linkPersonResult_;
 };
