@@ -28,10 +28,12 @@ public:
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
 
+	enum class ViewMode { AllSources, Aggregate, SingleSource };
+
 	bool isRunning() const;
 	void processEvents();
 	void beginFrame();
-	void renderTitleBarAndMenu();
+	void renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderCanvas(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships);
 	void endFrame();
 
@@ -100,7 +102,6 @@ public:
 	void setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results);
 
 	// Aggregate layer toggle
-	bool aggregateViewEnabled() const { return aggregateViewEnabled_; }
 	void requestLinkPersonModal(const std::string& personRowKey) {
 		showLinkPersonModal_ = true;
 		linkSourcePersonKey_ = personRowKey;
@@ -109,6 +110,10 @@ public:
 	void renderLinkPersonModal();
 	std::optional<std::string> consumeLinkSearchQuery();
 	void setLinkSearchResults(const std::vector<gedcomx::Person>& results);
+
+	// View mode
+	ViewMode viewMode() const { return viewMode_; }
+	std::string viewModeSourceId() const { return viewModeSourceId_; }
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -196,6 +201,10 @@ private:
 	std::optional<int> neighborhoodDepthChange_;
 	std::optional<size_t> maxVisibleNodesChange_;
 
+	// View Mode
+	ViewMode viewMode_ = ViewMode::AllSources;
+	std::string viewModeSourceId_;
+
 	// Modal window stuff 
 	void renderNewSourceModal();
 	void renderNewPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
@@ -245,7 +254,6 @@ private:
 	static void handleExportSaveDialogResult(void* userdata, const char* const* filelist, int filter);
 
 	// Aggregate Layer state
-	bool aggregateViewEnabled_ = false;
 	bool showLinkPersonModal_ = false;
 	std::string linkSourcePersonKey_;
 	char linkSearchBuffer_[128] = "";

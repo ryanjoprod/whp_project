@@ -5,6 +5,7 @@
 #include <limits>
 #include <algorithm>
 #include <iostream>
+#include <tuple>
 
 #include "app.h"
 #include "logger.h"
@@ -115,18 +116,36 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 	std::unordered_set<std::string> visitedPersons;
 	std::unordered_set<std::string> visitedRelationships;
 
-	std::queue<std::pair<std::string, int>> toVisit;  // (personKey, currentDepth)
-	toVisit.push({ rootPersonKey, 0 });
+	// Third element: was this entry reached via a cross-source link? If so,
+	// it still gets to explore its own relationships once, even past the
+	// normal depth cut-off - otherwise linking two records only ever reveals
+	// the linked person, never anything connected to them on that side.
+	std::queue<std::tuple<std::string, int, bool>> toVisit;  // (personKey, currentDepth, viaLink)
+	toVisit.push({ rootPersonKey, 0, false });
 	visitedPersons.insert(rootPersonKey);
 
 	while (!toVisit.empty()) {
-		auto [personKey, currentDepth] = toVisit.front();
+		auto [personKey, currentDepth, viaLink] = toVisit.front();
 		toVisit.pop();
 
 		auto person = db_->loadPerson(personKey);
 		if (person) visiblePeopleMap_[personKey] = *person;  // union: insert-or-update, nothing removed here
 
-		if (currentDepth >= depth) continue;  //stop expanding past the requested depth
+		// Cross-source identity links are "free" - following one doesn't
+		// consume depth budget, since it's not a genealogical distance,
+		// it's the same person described by a difference source.
+		try {
+			for (const auto& linkedKey : db_->getLinkedPersonKeys(personKey)) {
+				if (visitedPersons.insert(linkedKey).second) {
+					toVisit.push({ linkedKey, currentDepth, true });
+				}
+			}
+		}
+		catch (const std::exception& e) {
+			Logger::log(LogLevel::Error, std::string("Failed to resolve linked persons: ") + e.what());
+		}
+
+		if (currentDepth >= depth && !viaLink) continue;  //stop expanding past the requested depth
 
 		for (const auto& rel : db_->loadRelationshipsForPerson(personKey)) {
 			if (visitedRelationships.insert(rel.id).second) {
@@ -136,7 +155,7 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 			// Whichever side isn't the person we came from is the neighbor to explore next.
 			const std::string& neighborKey = (rel.person1Id == personKey) ? rel.person2Id : rel.person1Id;
 			if (visitedPersons.insert(neighborKey).second) {
-				toVisit.push({ neighborKey, currentDepth + 1 });
+				toVisit.push({ neighborKey, currentDepth + 1, false });
 			}
 		}
 	}
@@ -348,8 +367,8 @@ void App::rebuildAggregateView() {
 		gedcomx::Relationship aggRel;
 		aggRel.id = rel.id;
 		aggRel.type = rel.type;
-		aggRel.person1Id = rel.person1Id;
-		aggRel.person2Id = rel.person2Id;
+		aggRel.person1Id = rep1;
+		aggRel.person2Id = rep2;
 		aggregateVisibleRelationships_.push_back(std::move(aggRel));
 	}
 
@@ -360,13 +379,26 @@ void App::run() {
 	while (window_.isRunning()) {
 		window_.processEvents();
 		window_.beginFrame();
-		window_.renderTitleBarAndMenu();
-		if (window_.aggregateViewEnabled()) {
-			if (aggregateViewDirty_) rebuildAggregateView();
-			window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_);
-		}
-		else {
-			window_.renderCanvas(visiblePeople_, visibleRelationships_);
+		window_.renderTitleBarAndMenu(knownSources_);
+		switch (window_.viewMode()) {
+			case Window::ViewMode::AllSources: {
+				window_.renderCanvas(visiblePeople_, visibleRelationships_);
+				break;
+			}
+			case Window::ViewMode::SingleSource: {
+				std::string filterId = window_.viewModeSourceId();
+				std::vector<gedcomx::Person> filteredPeople;
+				std::vector<gedcomx::Relationship> filteredRels;
+				for (const auto& p : visiblePeople_) if (p.sourceId == filterId) filteredPeople.push_back(p);
+				for (const auto& r : visibleRelationships_) if (r.sourceId == filterId) filteredRels.push_back(r);
+				window_.renderCanvas(filteredPeople, filteredRels);
+				break;
+			}
+			case Window::ViewMode::Aggregate: {
+				if (aggregateViewDirty_) rebuildAggregateView();
+				window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_);
+				break;
+			}
 		}
 		window_.renderLogWindow();
 		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);

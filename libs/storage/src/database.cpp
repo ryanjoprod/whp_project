@@ -203,6 +203,15 @@ namespace storage {
 			return result;
 		}
 
+		std::vector<std::string> getLinkedPersonKeys(const std::string& personKey) {
+			std::vector<std::string> result;
+
+			query("SELECT DISTINCT pl2.person_id FROM person_links pl1 JOIN person_links pl2 ON pl1.aggregate_id = pl2.aggregate_id WHERE pl1.person_id = '" + personKey + "' AND pl2.person_id != '" + personKey + "';",
+				[&](sqlite3_stmt* s) { result.push_back(columnText(s, 0)); });
+
+			return result;
+		}
+
 		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
 			std::string relKey = rowKey(sourceId, rel.id);
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
@@ -768,6 +777,7 @@ namespace storage {
 
 			gedcomx::Relationship rel;
 			rel.id = columnText(s, 1);
+			rel.sourceId = columnText(s, 2);
 			rel.type = columnText(s, 3);
 			rel.person1Id = columnText(s, 4);
 			rel.person2Id = columnText(s, 5);
@@ -809,6 +819,10 @@ namespace storage {
 
 	std::optional<gedcomx::Person> Database::loadPerson(const std::string& personKey) {
 		return impl_->loadPerson(personKey);
+	}
+
+	std::vector<std::string> Database::getLinkedPersonKeys(const std::string& personKey) {
+		return impl_->getLinkedPersonKeys(personKey);
 	}
 
 	void Database::save(const gedcomx::Relationship& relationship, const std::string& sourceId) {
