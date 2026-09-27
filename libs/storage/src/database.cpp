@@ -25,13 +25,14 @@ namespace storage {
 			std::string key = rowKey(sourceId, person.id);
 			exec("BEGIN TRANSACTION;");
 
-			upsert("INSERT OR REPLACE INTO persons (row_key, local_id, source_id, confidence, lang) VALUES (?, ?, ?, ?, ?);",
+			upsert("INSERT OR REPLACE INTO persons (row_key, local_id, source_id, confidence, lang, gender) VALUES (?, ?, ?, ?, ?, ?);",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, key);
 					bindText(s, 2, person.id);
 					bindText(s, 3, sourceId);
 					bindText(s, 4, person.conclusion.confidence);
 					bindText(s, 5, person.conclusion.lang);
+					bindText(s, 6, person.gender ? person.gender->type : "");
 				});
 
 			// Clear old names for this person before re-inseting (simple
@@ -40,8 +41,13 @@ namespace storage {
 
 			for (const auto& name : person.names) {
 				long long nameId = insertReturningId(
-					"INSERT INTO names (person_id) VALUES (?);",
-					[&](sqlite3_stmt* s) { bindText(s, 1, key); }
+					"INSERT INTO names (person_id, title, nick_name, call_name) VALUES (?, ?, ?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, key);
+						bindText(s, 2, name.title);
+						bindText(s, 3, name.nickName);
+						bindText(s, 4, name.callName);
+					}
 				);
 
 				for (const auto& form : name.nameForms) {
@@ -65,6 +71,7 @@ namespace storage {
 				}
 			}
 
+			exec("DELETE FROM person_facts WHERE person_id = '" + key + "';");
 			for (const auto& fact : person.facts) {
 				std::string factKey = rowKey(key, fact.id);
 				upsert("INSERT OR REPLACE INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
@@ -95,6 +102,8 @@ namespace storage {
 			}
 
 			saveNotesFor("person_notes", "person_id", key, person.conclusion.notes);
+			saveAddressesFor(key, person.addresses);
+			saveAttributesFor(key, person.attributes);
 
 			exec("COMMIT;");
 		}
@@ -104,7 +113,7 @@ namespace storage {
 
 			// One query per person is simple to reason about; a single join
 			// would be faster but harder to read at this stage of the project.
-			query("SELECT row_key, local_id, source_id, confidence, lang FROM persons;",
+			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons;",
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string localId = columnText(s, 1);
@@ -117,6 +126,10 @@ namespace storage {
 					person.conclusion.confidence = columnText(s, 3);
 					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
+					std::string genderType = columnText(s, 5);
+					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
+					person.attributes = loadAttributesFor(key);
+					person.addresses = loadAddressesFor(key);
 
 					people[key] = std::move(person);
 				});
@@ -183,7 +196,7 @@ namespace storage {
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
 			std::optional<gedcomx::Person> result;
 
-			query("SELECT row_key, local_id, source_id, confidence, lang FROM persons WHERE row_key = '" + personKey + "';",
+			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons WHERE row_key = '" + personKey + "';",
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string local_id = columnText(s, 1);
@@ -196,6 +209,10 @@ namespace storage {
 					person.conclusion.confidence = columnText(s, 3);
 					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
+					std::string genderType = columnText(s, 5);
+					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
+					person.attributes = loadAttributesFor(key);
+					person.addresses = loadAddressesFor(key);
 
 					result = person;
 				});
@@ -614,6 +631,68 @@ namespace storage {
 			return result;
 		}
 
+		void saveAttributesFor(const std::string& ownerKey, const std::vector<gedcomx::Attribute>& attrs) {
+			exec("DELETE FROM person_attributes WHERE person_id = '" + ownerKey + "';");
+			for (const auto& a : attrs) {
+				std::string attrKey = rowKey(ownerKey, a.id);
+				upsert("INSERT INTO person_attributes (row_key, person_id, type, value) VALUES (?, ?, ?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, attrKey);
+						bindText(s, 2, ownerKey);
+						bindText(s, 3, a.type);
+						bindText(s, 4, a.value);
+					});
+			}
+		}
+
+		std::vector<gedcomx::Attribute> loadAttributesFor(const std::string& ownerKey) {
+			std::vector<gedcomx::Attribute> result;
+			query("SELECT row_key, type, value FROM person_attributes WHERE person_id = '" + ownerKey + "';",
+				[&](sqlite3_stmt* s) {
+					gedcomx::Attribute a;
+					a.id = stripSourcePrefix(columnText(s, 0), ownerKey);
+					a.type = columnText(s, 1);
+					a.value = columnText(s, 2);
+					result.push_back(std::move(a));
+				});
+
+			return result;
+		}
+
+		void saveAddressesFor(const std::string& ownerKey, const std::vector<gedcomx::Address>& addrs) {
+			exec("DELETE FROM person_addresses WHERE person_id = '" + ownerKey + "';");
+			for (const auto& addr : addrs) {
+				std::string addrKey = rowKey(ownerKey, addr.id);
+				upsert("INSERT INTO person_addresses (row_key, person_id, street, city, state_or_province, postal_code, country) VALUES (?, ?, ?, ?, ?, ?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, addrKey);
+						bindText(s, 2, ownerKey);
+						bindText(s, 3, addr.street);
+						bindText(s, 4, addr.city);
+						bindText(s, 5, addr.stateOrProvince);
+						bindText(s, 6, addr.postalCode);
+						bindText(s, 7, addr.country);
+					});
+			}
+		}
+
+		std::vector<gedcomx::Address> loadAddressesFor(const std::string& ownerKey) {
+			std::vector<gedcomx::Address> result;
+			query("SELECT row_key, street, city, state_or_province, postal_code, country FROM person_addresses WHERE person_id = '" + ownerKey + "';",
+				[&](sqlite3_stmt* s) {
+					gedcomx::Address addr;
+					addr.id = stripRowKeyPrefix(columnText(s, 0), ownerKey);
+					addr.street = columnText(s, 1);
+					addr.city = columnText(s, 2);
+					addr.stateOrProvince = columnText(s, 3);
+					addr.postalCode = columnText(s, 4);
+					addr.country = columnText(s, 5);
+					result.push_back(std::move(addr));
+				});
+
+			return result;
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 
@@ -632,10 +711,13 @@ namespace storage {
 		std::vector<gedcomx::Name> loadNamesFor(const std::string& personId) {
 			std::vector<gedcomx::Name> names;
 
-			query("SELECT id FROM names WHERE person_id = '" + personId + "';",
+			query("SELECT id, title, nick_name, call_name FROM names WHERE person_id = '" + personId + "';",
 				[&](sqlite3_stmt* s) {
 					long long nameId = sqlite3_column_int64(s, 0);
 					gedcomx::Name name;
+					name.title = columnText(s, 1);
+					name.nickName = columnText(s, 2);
+					name.callName = columnText(s, 3);
 
 					query("SELECT id, full_text FROM name_forms WHERE name_id = " + std::to_string(nameId) + ";",
 						[&](sqlite3_stmt* fs) {

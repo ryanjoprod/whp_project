@@ -52,6 +52,7 @@ private:
 	// Aggregate layer
 	bool aggregateViewDirty_ = true;
 	std::vector<gedcomx::Person> aggregateVisiblePeople_;
+	std::unordered_map<std::string, std::vector<std::string>> aggregateContributingSourceIds_; // merged person id -> distinct source ids
 	std::vector<gedcomx::Relationship> aggregateVisibleRelationships_;
 	void rebuildAggregateView();
 };

@@ -16,6 +16,7 @@
 #include "gedcomx/relationship.h"
 #include "gedcomx/fact.h"
 #include "gedcomx/source_description.h"
+#include "storage/database.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -34,7 +35,7 @@ public:
 	void processEvents();
 	void beginFrame();
 	void renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>& knownSources);
-	void renderCanvas(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships);
+	void renderCanvas(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships, const std::vector<gedcomx::SourceDescription>& knownSources, const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds);
 	void endFrame();
 
 	// Window resize and reframe
@@ -82,7 +83,6 @@ public:
 
 	// Modal window methods
 	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
-	void requestNewPersonModal() { showNewPersonModal_ = true; }
 	void requestNewRelationshipModal() { showNewRelationshipModal_ = true; }
 	void renderExportModal(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestExportModal() { showExportModal_ = true; }
@@ -90,9 +90,7 @@ public:
 
 	// Modal window state
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
-	std::optional<gedcomx::Person> consumeNewPersonRequest();
 	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeNewRelationshipRequest();
-	std::optional<std::pair<gedcomx::Person, std::string>> consumeNewFactRequest();
 	std::optional<std::string> consumeExportSourceRequest();
 	std::optional<std::string> consumeExportSavePath();
 
@@ -100,6 +98,12 @@ public:
 	// but this one needs a return value each frame, not just a fire-and-forget.
 	std::optional<std::pair<std::string, std::string>> consumePersonSearchQuery(int pickerIndex);
 	void setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results);
+
+	// Person window
+	void requestNewPersonEditor();
+	void requestEditPersonEditor(const gedcomx::Person& person);
+	void renderPersonEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
+	std::optional<std::pair<gedcomx::Person, std::string>> consumePersonEditResult();
 
 	// Aggregate layer toggle
 	void requestLinkPersonModal(const std::string& personRowKey) {
@@ -121,6 +125,11 @@ private:
 	bool running_ = true;
 	bool showLogWindow_ = false;
 	static constexpr float kTitleBarHeight = 32.0f;
+
+	struct EditableNameEntry {
+		char given[128] = "";
+		char surname[128] = "";
+	};
 
 	// Draws a list of Selectable rows, giving each a unique ImGui ID via
 	// "displayText##uniqueId" so items with identical display text (e.g.
@@ -154,9 +163,9 @@ private:
 	std::string draggedNodeId_;
 	ImVec2 dragStartMousePos_;  // used to distinguish click from drag
 
-	// Fact displaay state
+	// Fact display state
 	std::string selectedPersonId_;
-	void renderDetailsPanel(const std::vector<gedcomx::Person>& people);
+	void renderDetailsPanel(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::SourceDescription>& knownSources, const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds);
 
 	// Camera stuff
 	Camera camera_;
@@ -207,21 +216,54 @@ private:
 
 	// Modal window stuff 
 	void renderNewSourceModal();
-	void renderNewPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderNewRelationshipModal();
 
 	// Source Modal state
-	bool showNewSourceModal_ = false;
 	std::string pendingAutoSelectSourceId_;
 	char newSourceTitleBuffer_[256] = "";
 	std::optional<gedcomx::SourceDescription> newSourceResult_;
 
 	// Person Modal state
-	bool showNewPersonModal_ = false;
-	char newPersonGiveNameBuffer_[128] = "";
-	char newPersonSurnameBuffer_[128] = "";
+	bool showPersonEditor_ = false;
+	bool editingExistingPerson_ = false;
+	gedcomx::Person workingPerson_;
+	std::vector<EditableNameEntry> editNames_;
+	
+	char primaryGivenBuffer_[128] = "";
+	char primarySurnameBuffer_[128] = "";
+	char primaryTitleBuffer_[128] = "";
+	char primaryNicknameBuffer_[128] = "";
+	char primaryCallNameBuffer_[128] = "";
+	int genderIndex_ = 2;  // 0=Female, 1=Male, 2=Unknown, 3=Other
+
+	int editingAttributeIndex_ = -1;
+	char attrTypeBuffer_[128] = "";
+	char attrValueBuffer_[256] = "";
+
+	int editingAddressIndex_ = -1;
+	char addrStreetBuffer_[128] = "";
+	char addrCityBuffer_[1128] = "";
+	char addrStateBuffer_[128] = "";
+	char addrPostalBuffer_[128] = "";
+	char addrCountryBuffer_[64] = "";
+
+	char factTypeCustomBuffer_[128] = "";
+	int selectedFactTypeIndex_ = 0;
+	char factDateBuffer_[64] = "";
+	char factPlaceBuffer_[128] = "";
+	int editingFactIndex_ = -1;  // -1 = adding; >=0 = editing that index
+
 	int selectedSourceIndex_ = -1;
-	std::optional<gedcomx::Person> newPersonResult_;
+	int selectedSourceToAddIndex_ = -1;  // Sources tab's "add citation picker"
+
+	std::optional<std::pair<gedcomx::Person, std::string>> personEditResult_;
+
+	void renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderPersonEditorEventsTab();
+	void renderPersonEditorNamesTab();
+	void renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderPersonEditorAttributesTab();
+	void renderPersonEditorAddressessTab();
 
 	// Relationship Modal state
 	bool showNewRelationshipModal_ = false;
@@ -235,14 +277,6 @@ private:
 	char relationshiptypeCustomBuffer_[128] = "";
 	int selectedRelationshipTypeIndex_ = 0;
 	std::optional<std::pair<gedcomx::Relationship, std::string>> newRelationshipResult_;
-
-	// Fact Modal state
-	bool showAddFactForm_ = false;
-	char newFactDateBuffer_[64] = "";
-	char newFactPlaceBuffer_[128] = "";
-	char newFactTypeCustomBuffer_[128] = "";
-	int selectedFactTypeIndex_ = 0;
-	std::optional<std::pair<gedcomx::Person, std::string>> newFactResult_;
 
 	// Export Modal
 	bool showExportModal_ = false;

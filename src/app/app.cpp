@@ -296,6 +296,7 @@ void App::rebuildVisibleVectors() {
 
 void App::rebuildAggregateView() {
 	aggregateVisiblePeople_.clear();
+	aggregateContributingSourceIds_.clear();
 	aggregateVisibleRelationships_.clear();
 
 	if (!db_) {
@@ -338,10 +339,14 @@ void App::rebuildAggregateView() {
 		merged.id = identityToRepresentative[identity];
 		merged.sourceId = members[0].sourceId;  // display-only; a merged node may span sources
 
+		std::vector<std::string> sourceIds;
 		for (const auto& m : members) {
 			merged.names.insert(merged.names.end(), m.names.begin(), m.names.end());
 			merged.facts.insert(merged.facts.end(), m.facts.begin(), m.facts.end());
+			if (std::find(sourceIds.begin(), sourceIds.end(), m.sourceId) == sourceIds.end())
+				sourceIds.push_back(m.sourceId);
 		}
+		aggregateContributingSourceIds_[merged.id] = sourceIds;
 
 		aggregateVisiblePeople_.push_back(std::move(merged));
 	}
@@ -382,7 +387,7 @@ void App::run() {
 		window_.renderTitleBarAndMenu(knownSources_);
 		switch (window_.viewMode()) {
 			case Window::ViewMode::AllSources: {
-				window_.renderCanvas(visiblePeople_, visibleRelationships_);
+				window_.renderCanvas(visiblePeople_, visibleRelationships_, knownSources_, {});
 				break;
 			}
 			case Window::ViewMode::SingleSource: {
@@ -391,12 +396,12 @@ void App::run() {
 				std::vector<gedcomx::Relationship> filteredRels;
 				for (const auto& p : visiblePeople_) if (p.sourceId == filterId) filteredPeople.push_back(p);
 				for (const auto& r : visibleRelationships_) if (r.sourceId == filterId) filteredRels.push_back(r);
-				window_.renderCanvas(filteredPeople, filteredRels);
+				window_.renderCanvas(filteredPeople, filteredRels, knownSources_, {});
 				break;
 			}
 			case Window::ViewMode::Aggregate: {
 				if (aggregateViewDirty_) rebuildAggregateView();
-				window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_);
+				window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_, knownSources_, aggregateContributingSourceIds_);
 				break;
 			}
 		}
@@ -520,31 +525,24 @@ void App::run() {
 			}
 		}
 
-		if (auto newPerson = window_.consumeNewPersonRequest()) {
+		if (auto editedPerson = window_.consumePersonEditResult()) {
 			try {
-				std::string sourceId = newPerson->sourceId;
-				db_->save(*newPerson, sourceId);
-				currentRootKey_ = sourceId + ":" + newPerson->id;
-				// fix id generation
-				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
-			}
-			catch (const std::exception& e) {
-				Logger::log(LogLevel::Error, std::string("Failed to create person: ") + e.what());
-			}
-		}
+				gedcomx::Person person = editedPerson->first;
+				const std::string& sourceId = editedPerson->second;
+				std::string rowKey = sourceId + ":" + person.id;
+				bool wasAlreadyVisible = visiblePeopleMap_.find(rowKey) != visiblePeopleMap_.end();
 
-		if (auto newFact = window_.consumeNewFactRequest()) {
-			try {
-				const gedcomx::Person& person = newFact->first;
-				const std::string& sourceId = newFact->second;
 				db_->save(person, sourceId);
 
+				if (!wasAlreadyVisible) {
+					currentRootKey_ = rowKey;
+				}
 				if (!currentRootKey_.empty()) {
-					loadNeighborhood(currentRootKey_, neighborhoodDepth_);  // refresh so the panel shows the new fact
+					loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 				}
 			}
-			catch (std::exception& e) {
-				Logger::log(LogLevel::Error, std::string("Failed to add fact: ") + e.what());
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Faield to save person: ") + e.what());
 			}
 		}
 

@@ -8,6 +8,7 @@ add_executable(app
 	window_titlebar.cpp
 	window_canvas.cpp
 	window_dialogs.cpp
+	window_person_editor.cpp
 	camera.cpp
 	project.cpp
 	logger.cpp

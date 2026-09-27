@@ -14,12 +14,16 @@ namespace storage {
 			source_id TEXT NOT NULL,
 			confidence TEXT,
 			lang TEXT,
+			gender TEXT,
 			FOREIGN KEY (source_id) REFERENCES sources(id)
 		);
 
 		CREATE TABLE IF NOT EXISTS names (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			person_id TEXT NOT NULL,
+			title TEXT,
+			nick_name TEXT,
+			call_name TEXT,
 			FOREIGN KEY (person_id) REFERENCES persons(id)
 		);
 
@@ -261,6 +265,23 @@ namespace storage {
 			source_description_id TEXT NOT NULL,
 			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key),
 			FOREIGN KEY (source_description_id) REFERENCES sources(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS person_attributes (
+			row_key TEXT PRIMARY KEY,
+			person_id TEXT NOT NULL,
+			type TEXT,
+			value TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS person_addresses (
+			row_key TEXT PRIMARY KEY,
+			person_id TEXT NOT NULL,
+			street TEXT,
+			city TEXT,
+			state_or_province TEXT,
+			country TEXT,
+			postal_code TEXT
 		);
 	)";
 }
