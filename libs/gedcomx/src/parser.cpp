@@ -149,7 +149,7 @@ namespace gedcomx {
 		return fact;
 	}
 
-	std::string formatFactType(const std::string& typeUri) {
+	std::string formatTypeUri(const std::string& typeUri) {
 		const std::string prefix = "http://gedcomx.org/";
 		if (typeUri.rfind(prefix, 0) == 0) {
 			return typeUri.substr(prefix.size());
