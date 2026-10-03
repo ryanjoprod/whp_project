@@ -84,6 +84,8 @@ public:
 	// Modal window methods
 	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestNewRelationshipModal() { showNewRelationshipModal_ = true; }
+	void renderRelationshipEditorPeopleTab();
+	void renderRelationshipEditorDetailsTab();
 	void renderExportModal(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestExportModal() { showExportModal_ = true; }
 	void requestExportSaveDialog(const std::string& suggestedFileName);
