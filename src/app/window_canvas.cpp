@@ -228,11 +228,12 @@ void Window::renderCanvas(
 
     ImGui::End();
 
-    renderDetailsPanel(people, knownSources, aggregateSourceIds);
+    renderDetailsPanel(people, relationships, knownSources, aggregateSourceIds);
 }
 
 void Window::renderDetailsPanel(
     const std::vector<gedcomx::Person>& people,
+    const std::vector<gedcomx::Relationship>& relationships,
     const std::vector<gedcomx::SourceDescription>& knownSources,
     const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds)
 {
@@ -281,6 +282,35 @@ void Window::renderDetailsPanel(
                     fact.date.original.c_str(),
                     fact.place.original.c_str());
             }
+        }
+
+        bool shownHeader = false;
+        for (int r = 0; r < (int)relationships.size(); ++r) {
+            const auto& rel = relationships[r];
+            if (rel.type != "http://gedcomx.org/Couple") continue;
+            bool isP1 = rel.person1Id == person.id;
+            if (!isP1 && rel.person2Id != person.id) continue;
+
+            const std::string& partnerId = isP1 ? rel.person2Id : rel.person1Id;
+            auto pit = std::find_if(people.begin(), people.end(),
+                [&](const gedcomx::Person& p) { return p.id == partnerId; });
+
+            if (!shownHeader) { 
+                ImGui::Spacing();
+                ImGui::Text("Relationships:");
+                shownHeader = true;
+            }
+            ImGui::PushID(r);
+            ImGui::BulletText("%s", pit != people.end() ? pit->primaryFullText().c_str() : partnerId.c_str());
+            for (const auto& f : rel.facts) {
+                ImGui::BulletText("  %s: %s %s", gedcomx::formatTypeUri(f.type).c_str(), f.date.original.c_str(), f.place.original.c_str());
+            }
+            ImGui::BeginDisabled(pit == people.end());
+            if (ImGui::SmallButton("Edit...") && pit != people.end()) {
+                requestEditRelationshipEditor(rel, isP1 ? person : *pit, isP1 ? *pit : person);
+            }
+            ImGui::EndDisabled();
+            ImGui::PopID();
         }
 
         ImGui::Spacing();

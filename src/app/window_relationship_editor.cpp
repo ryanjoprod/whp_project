@@ -49,7 +49,26 @@ void Window::renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceD
     auto selected = [&](int slot) -> const gedcomx::Person* {
         int i = selectedPersonIndex_[slot];
         return (i >= 0 && i < (int)personSearchResults_[slot].size()) ? &personSearchResults_[slot][i] : nullptr;
-        };
+    };
+
+    if (editingExistingRelationship_) {
+        if (ImGui::BeginTable("RelationshipPeople", 2, ImGuiTableFlags_SizingFixedFit)) {
+            ImGui::TableSetupColumn("##p1", ImGuiTableColumnFlags_WidthFixed, 280.0f);
+            ImGui::TableSetupColumn("##p2", ImGuiTableColumnFlags_WidthFixed, 280.0f);
+            for (int slot = 0; slot < 2; ++slot) {
+                ImGui::TableNextColumn();
+                ImGui::Text("Person %d", slot + 1);
+                ImGui::Separator();
+                renderPersonSummary(selected(slot));
+            }
+            ImGui::EndTable();
+        }
+        const gedcomx::Fact* unionFact = findUnionFact(workingRelationship_);
+        ImGui::Text("Union:");
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", unionFact ? gedcomx::formatTypeUri(unionFact->type).c_str() : "(none)");
+        return;
+    }
 
     if (ImGui::BeginTable("RelationshipPeople", 2, ImGuiTableFlags_SizingFixedFit)) {
         ImGui::TableSetupColumn("##p1", ImGuiTableColumnFlags_WidthFixed, 280.0f);
@@ -227,6 +246,26 @@ void Window::requestNewRelationshipEditor() {
     showNewRelationshipModal_ = true;
 }
 
+void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, const gedcomx::Person& p1, const gedcomx::Person& p2) {
+    workingRelationship_ = rel;
+    editingExistingRelationship_ = true;
+    relationshipSourceId_ = rel.sourceId;
+
+    const gedcomx::Person* people[2] = { &p1, &p2 };
+    for (int i = 0; i < 2; ++i) {
+        personSearchBuffer_[i][0] = '\0';
+        personSearchResults_[i] = { *people[i] };
+        selectedPersonIndex_[i] = 0;
+        pendingSearchQuery_[i].reset();
+    }
+    editingExistingRelationship_ = false;
+    relEditingFactIndex_ = -1;
+    relSelectedFactTypeIndex_ = 0;
+    relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
+
+    showNewRelationshipModal_ = true;
+}
+
 void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources) {
     if (showNewRelationshipModal_ && !ImGui::IsPopupOpen("Relationship Editor")) {
         ImGui::OpenPopup("Relationship Editor");
@@ -266,12 +305,16 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
         ImGui::BeginDisabled(noPerson1 || noPerson2);
         if (ImGui::Button("Save")) {
             gedcomx::Relationship result = workingRelationship_;
-            result.id = idgen::generateLocalId("R_");
+            if (!editingExistingRelationship_) result.id = idgen::generateLocalId("R_");
             result.type = "http://gedcomx.org/Couple";
             result.person1Id = storage::stripRowKeyPrefix(personSearchResults_[0][selectedPersonIndex_[0]].id, relationshipSourceId_);
             result.person2Id = storage::stripRowKeyPrefix(personSearchResults_[1][selectedPersonIndex_[1]].id, relationshipSourceId_);
 
-            newRelationshipResult_ = std::make_pair(std::vector<gedcomx::Relationship>{ result }, relationshipSourceId_);
+            if (editingExistingRelationship_)
+                editRelationshipResult_ = std::make_pair(result, relationshipSourceId_);
+            else
+                newRelationshipResult_ = std::make_pair(std::vector<gedcomx::Relationship>{ result }, relationshipSourceId_);
+
             showNewRelationshipModal_ = false;
             ImGui::CloseCurrentPopup();
         }
@@ -303,6 +346,12 @@ std::optional<std::pair<std::string, std::string>> Window::consumePersonSearchQu
     // whichever source Person 1 belongs to.
     std::string sourceFilter = (pickerIndex == 1) ? relationshipSourceId_ : "";
     return std::make_pair(query, sourceFilter);
+}
+
+std::optional<std::pair<gedcomx::Relationship, std::string>> Window::consumeRelationshipEditResult() {
+    auto result = editRelationshipResult_;
+    editRelationshipResult_.reset();
+    return result;
 }
 
 void Window::setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results) {

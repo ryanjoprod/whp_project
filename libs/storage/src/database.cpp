@@ -255,6 +255,11 @@ namespace storage {
 					});
 			}
 
+			const std::string oldFacts = "(SELECT row_key FROM relationship_facts WHERE relationship_id = '" + relKey + "')";
+			exec("DELETE FROM relationship_fact_sources WHERE relationship_fact_id IN " + oldFacts + ";");
+			exec("DELETE FROM relationship_fact_notes WHERE relationship_fact_id IN " + oldFacts + ";");
+			exec("DELETE FROM relationship_facts WHERE relationship_id = '" + relKey + "';");
+
 			for (const auto& fact : rel.facts) {
 				std::string factKey = rowKey(relKey, fact.id);
 				upsert("INSERT OR REPLACE INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",

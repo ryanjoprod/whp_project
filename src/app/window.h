@@ -116,9 +116,9 @@ public:
 
 	// Relationship window
 	void requestNewRelationshipEditor();
-	// void requestEditRelationshipEditor(const gedcomx::Relationship& relationship);
+	void requestEditRelationshipEditor(const gedcomx::Relationship& relationship, const gedcomx::Person& person1, const gedcomx::Person& person2);
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
-	// std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
+	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
 
 	// View mode
 	ViewMode viewMode() const { return viewMode_; }
@@ -170,7 +170,7 @@ private:
 
 	// Fact display state
 	std::string selectedPersonId_;
-	void renderDetailsPanel(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::SourceDescription>& knownSources, const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds);
+	void renderDetailsPanel(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships, const std::vector<gedcomx::SourceDescription>& knownSources, const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds);
 
 	// Camera stuff
 	Camera camera_;
@@ -286,6 +286,8 @@ private:
 
 	// Relationship Type Modal state
 	std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> newRelationshipResult_;
+	bool editingExistingRelationship_ = false;
+	std::optional<std::pair<gedcomx::Relationship, std::string>> editRelationshipResult_;
 
 	void renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderRelationshipEditorChildrenTab();

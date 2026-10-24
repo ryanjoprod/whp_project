@@ -574,6 +574,16 @@ void App::run() {
 				Logger::log(LogLevel::Error, std::string("Failed to create relationship: ") + e.what());
 			}
 		}
+
+		if (auto edited = window_.consumeRelationshipEditResult()) {
+			try {
+				db_->save(edited->first, edited->second);
+				if (!currentRootKey_.empty()) loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to save relationship: ") + e.what());
+			}
+		}
 	
 		if (auto exportSourceId = window_.consumeExportSourceRequest()) {
 			pendingExportSourceId_ = *exportSourceId;
