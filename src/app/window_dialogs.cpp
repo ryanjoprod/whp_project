@@ -5,14 +5,6 @@
 #include "id_generator.h"
 #include "storage/database.h"
 
-namespace {
-    const char* kRelationshipTypes[] = {
-        "http://gedcomx.org/Couple",
-        "http://gedcomx.org/ParentChild",
-        "Custom..."
-    };
-}
-
 // --- Open Source File ---
 
 void Window::requestOpenFileDialog() {
@@ -251,7 +243,7 @@ std::optional<size_t> Window::consumeMaxVisibleNodesChange() {
 
 void Window::renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources) {
     renderPersonEditor(knownSources);
-    renderNewRelationshipModal();
+    renderRelationshipEditor(knownSources);
     renderExportModal(knownSources);
     renderLinkPersonModal();
 }
@@ -417,162 +409,6 @@ std::optional<gedcomx::Person> Window::consumeNewPersonRequest() {
 }
 */
 
-// --- Relationship Modal ---
-
-void Window::renderNewRelationshipModal() {
-    if (showNewRelationshipModal_ && !ImGui::IsPopupOpen("New Relationship")) {
-        ImGui::OpenPopup("New Relationship");
-    }
-
-    if (ImGui::BeginPopupModal("New Relationship", &showNewRelationshipModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (ImGui::BeginTabBar("RelationshipEditorTabs")) {
-            if (ImGui::BeginTabItem("People")) {
-                renderRelationshipEditorPeopleTab();
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Details")) {
-                renderRelationshipEditorDetailsTab();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-
-        ImGui::Separator();
-
-        bool noPerson1 = selectedPersonIndex_[0] < 0 || selectedPersonIndex_[0] >= (int)personSearchResults_[0].size();
-        bool noPerson2 = selectedPersonIndex_[1] < 0 || selectedPersonIndex_[1] >= (int)personSearchResults_[1].size();
-        bool isCustomType = selectedRelationshipTypeIndex_ == IM_ARRAYSIZE(kRelationshipTypes) - 1;
-        bool noCustomType = isCustomType && relationshiptypeCustomBuffer_[0] == '\0';
-
-        ImGui::BeginDisabled(noPerson1 || noPerson2 || noCustomType);
-        if (ImGui::Button("Create Relationship")) {
-            gedcomx::Relationship rel;
-            rel.id = idgen::generateLocalId("R_");
-
-            const std::string& p1RowKey = personSearchResults_[0][selectedPersonIndex_[0]].id;
-            const std::string& p2RowKey = personSearchResults_[1][selectedPersonIndex_[1]].id;
-            rel.person1Id = storage::stripRowKeyPrefix(p1RowKey, relationshipSourceId_);
-            rel.person2Id = storage::stripRowKeyPrefix(p2RowKey, relationshipSourceId_);
-
-            rel.type = isCustomType ? relationshiptypeCustomBuffer_ : kRelationshipTypes[selectedRelationshipTypeIndex_];
-
-            newRelationshipResult_ = std::make_pair(rel, relationshipSourceId_);
-
-            personSearchBuffer_[0][0] = personSearchBuffer_[1][0] = '\0';
-            personSearchResults_[0].clear();
-            personSearchResults_[1].clear();
-            selectedPersonIndex_[0] = selectedPersonIndex_[1] = -1;
-            relationshipSourceId_.clear();
-            relationshiptypeCustomBuffer_[0] = '\0';
-            selectedRelationshipTypeIndex_ = 0;
-
-            ImGui::CloseCurrentPopup();
-            showNewRelationshipModal_ = false;
-        }
-        ImGui::EndDisabled();
-
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-            showNewRelationshipModal_ = false;
-        }
-
-        ImGui::EndPopup();
-    }
-}
-
-void Window::renderRelationshipEditorPeopleTab() {
-    ImGui::PushID(0);
-    ImGui::Text("Person 1");
-    if (ImGui::InputText("Search", personSearchBuffer_[0], sizeof(personSearchBuffer_[0]))) {
-        pendingSearchQuery_[0] = personSearchBuffer_[0];
-        selectedPersonIndex_[0] = -1;
-    }
-    for (int i = 0; i < (int)personSearchResults_[0].size(); ++i) {
-        bool isSelected = (i == selectedPersonIndex_[0]);
-        std::string label = personSearchResults_[0][i].primaryFullText() + "##" + personSearchResults_[0][i].id;
-        if (ImGui::Selectable(label.c_str(), isSelected)) {
-            selectedPersonIndex_[0] = i;
-            relationshipSourceId_ = personSearchResults_[0][i].sourceId;
-
-            personSearchBuffer_[1][0] = '\0';
-            personSearchResults_[1].clear();
-            selectedPersonIndex_[1] = -1;
-        }
-    }
-    ImGui::PopID();
-    ImGui::Spacing();
-
-    ImGui::PushID(1);
-    ImGui::Text("Person 2");
-    ImGui::BeginDisabled(relationshipSourceId_.empty());
-    if (relationshipSourceId_.empty()) {
-        ImGui::TextDisabled("(select Person 1 first)");
-    }
-    else {
-        ImGui::TextDisabled("Searching within: %s", relationshipSourceId_.c_str());
-        if (ImGui::InputText("Search", personSearchBuffer_[1], sizeof(personSearchBuffer_[1]))) {
-            pendingSearchQuery_[1] = personSearchBuffer_[1];
-            selectedPersonIndex_[1] = -1;
-        }
-        renderSelectableList<gedcomx::Person>(
-            personSearchResults_[1], &selectedPersonIndex_[1],
-            [](const gedcomx::Person& p) { return p.primaryFullText(); },
-            [](const gedcomx::Person& p) { return p.id; }
-        );
-    }
-    ImGui::EndDisabled();
-    ImGui::PopID();
-}
-
-void Window::renderRelationshipEditorDetailsTab() {
-    ImGui::Text("Relationship Type");
-    if (ImGui::BeginCombo("##relType", selectedRelationshipTypeIndex_ >= 0 && selectedRelationshipTypeIndex_ < IM_ARRAYSIZE(kRelationshipTypes)
-        ? gedcomx::formatTypeUri(kRelationshipTypes[selectedRelationshipTypeIndex_]).c_str() : "")) {
-        for (int i = 0; i < IM_ARRAYSIZE(kRelationshipTypes); ++i) {
-            std::string label = gedcomx::formatTypeUri(kRelationshipTypes[i]);
-            if (ImGui::Selectable(label.c_str(), i == selectedRelationshipTypeIndex_)) selectedRelationshipTypeIndex_ = i;
-        }
-        ImGui::EndCombo();
-    }
-
-    bool isCustomType = selectedRelationshipTypeIndex_ == IM_ARRAYSIZE(kRelationshipTypes) - 1;
-    if (isCustomType) {
-        ImGui::InputText("Custom Type URI", relationshiptypeCustomBuffer_, sizeof(relationshiptypeCustomBuffer_));
-    }
-}
-
-std::optional<std::pair<gedcomx::Relationship, std::string>> Window::consumeNewRelationshipRequest() {
-    auto result = newRelationshipResult_;
-    newRelationshipResult_.reset();
-
-    return result;
-}
-
-std::optional<std::pair<std::string, std::string>> Window::consumePersonSearchQuery(int pickerIndex) {
-    if (!pendingSearchQuery_[pickerIndex]) return std::nullopt;
-    std::string query = *pendingSearchQuery_[pickerIndex];
-    pendingSearchQuery_[pickerIndex].reset();
-
-    // Picker 0 (Person 1) is unrestricted; picker 1 (Person 2) is scoped to
-    // whichever source Person 1 belongs to.
-    std::string sourceFilter = (pickerIndex == 1) ? relationshipSourceId_ : "";
-    return std::make_pair(query, sourceFilter);
-}
-
-void Window::setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results) {
-    personSearchResults_[pickerIndex] = results;
-}
-
-/*
-std::optional<std::pair<gedcomx::Person, std::string>> Window::consumeNewFactRequest() {
-    auto result = newFactResult_;
-    newFactResult_.reset();
-
-    return result;
-}
-*/
-
 // --- Export Modal ---
 
 void Window::renderExportModal(const std::vector<gedcomx::SourceDescription>& knownSources) {
@@ -672,12 +508,12 @@ void Window::renderLinkPersonModal() {
             [](const gedcomx::Person& p) { return p.id; }
         );
 
-        bool noneSelected = selectedLinkIndex_ < 0 || selectedLinkIndex_ >= (int)linkSearchResults_.size();
+        bool noneSelected = selectedLinkIndex_ < 0 || selectedLinkIndex_ >= (int)filteredLinkResults.size();
 
         ImGui::Spacing();
         ImGui::BeginDisabled(noneSelected);
         if (ImGui::Button("Link")) {
-            linkPersonResult_ = std::make_pair(linkSourcePersonKey_, linkSearchResults_[selectedLinkIndex_].id);
+            linkPersonResult_ = std::make_pair(linkSourcePersonKey_, filteredLinkResults[selectedLinkIndex_].id);
 
             linkSearchBuffer_[0] = '\0';
             linkSearchResults_.clear();

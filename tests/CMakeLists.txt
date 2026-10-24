@@ -10,6 +10,7 @@ add_executable(whp_tests
 	gedcomx/test_source_export.cpp
 	storage/test_person_storage.cpp
 	storage/test_aggregate_storage.cpp
+	storage/test_relationship_storage.cpp
 )
 
 target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest)

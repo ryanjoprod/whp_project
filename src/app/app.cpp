@@ -560,11 +560,11 @@ void App::run() {
 			}
 		}
 
-		if (auto newRelationship = window_.consumeNewRelationshipRequest()) {
+		if (auto batch = window_.consumeNewRelationshipRequest()) {
 			try {
-				const gedcomx::Relationship& rel = newRelationship->first;
-				const std::string& sourceId = newRelationship->second;
-				db_->save(rel, sourceId);
+				const std::vector<gedcomx::Relationship>& relationship = batch->first;
+				const std::string& sourceId = batch->second;
+				db_->saveAll(relationship, sourceId);
 
 				if (!currentRootKey_.empty()) {
 					loadNeighborhood(currentRootKey_, neighborhoodDepth_);  // refresh to pick up the new edge

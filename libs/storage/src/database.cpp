@@ -229,7 +229,7 @@ namespace storage {
 			return result;
 		}
 
-		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
+		void saveRelationshipRow(const gedcomx::Relationship& rel, const std::string& sourceId) {
 			std::string relKey = rowKey(sourceId, rel.id);
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
 			std::string p2Key = rowKey(sourceId, rel.person2Id);
@@ -245,6 +245,15 @@ namespace storage {
 					bindText(s, 7, rel.conclusion.confidence);
 					bindText(s, 8, rel.conclusion.lang);
 				});
+
+			exec("DELETE FROM relationship_sources WHERE relationship_id = '" + relKey + "';");
+			for (const auto& relSrc : rel.conclusion.sources) {
+				upsert("INSERT INTO relationship_sources (relationship_id, source_description_id) VALUES (?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, relKey);
+						bindText(s, 2, relSrc.sourceDescriptionId);
+					});
+			}
 
 			for (const auto& fact : rel.facts) {
 				std::string factKey = rowKey(relKey, fact.id);
@@ -279,14 +288,28 @@ namespace storage {
 		}
 
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey) {
-			std::vector<gedcomx::Relationship> results;
+			std::vector<gedcomx::Relationship> rels;
 
-			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM relationships WHERE person1_id ='" + personKey + "' OR person2_id = '" + personKey + "';",
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM relationships WHERE person1_id ='" + personKey + "' OR person2_id = '" + personKey + "' ORDER BY row_key;",
 				[&](sqlite3_stmt* s) {
-					results.push_back(loadRelationshipRow(s));
+					rels.push_back(loadRelationshipRow(s));
 				});
 
-			return results;
+			return rels;
+		}
+
+		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
+			exec("BEGIN TRANSACTION;");
+			saveRelationshipRow(rel, sourceId);
+			exec("COMMIT;");
+		}
+
+		void saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId) {
+			exec("BEGIN TRANSACTION;");
+			for (const auto& rel : relationships) {
+				saveRelationshipRow(rel, sourceId);
+			}
+			exec("COMMIT;");
 		}
 
 		void save(const gedcomx::SourceDescription& source) {
@@ -623,8 +646,6 @@ namespace storage {
 			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM  relationships WHERE source_id = '" + sourceId + "';",
 				[&](sqlite3_stmt* s) {
 					gedcomx::Relationship rel = loadRelationshipRow(s);
-					rel.person1Id = stripRowKeyPrefix(rel.person1Id, sourceId);
-					rel.person2Id = stripRowKeyPrefix(rel.person2Id, sourceId);
 					result.relationships.push_back(std::move(rel));
 				});
 
@@ -840,7 +861,7 @@ namespace storage {
 			}
 		}
 
-		std::vector<gedcomx::Note> loadNotesFor(const std::string& table, const std::string& fkColumn, const std::string ownerKey) {
+		std::vector<gedcomx::Note> loadNotesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::Note> notes;
 			query("SELECT lang, subject, text FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';",
 				[&](sqlite3_stmt* s) {
@@ -852,6 +873,16 @@ namespace storage {
 				});
 
 			return notes;
+		}
+
+		std::vector <gedcomx::SourceReference>loadSourcesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
+			std::vector<gedcomx::SourceReference> sources;
+			query("SELECT source_description_id FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';",
+				[&](sqlite3_stmt* s) {
+					sources.push_back({ columnText(s, 0) });
+				});
+
+			return sources;
 		}
 
 		gedcomx::Relationship loadRelationshipRow(sqlite3_stmt* s) {
@@ -867,6 +898,7 @@ namespace storage {
 			rel.conclusion.confidence = columnText(s, 6);
 			rel.conclusion.lang = columnText(s, 7);
 			rel.conclusion.notes = loadNotesFor("relationship_notes", "relationship_id", relKey);
+			rel.conclusion.sources = loadSourcesFor("relationship_sources", "relationship_id", relKey);
 			
 			return rel;
 		}
@@ -907,12 +939,20 @@ namespace storage {
 		return impl_->getLinkedPersonKeys(personKey);
 	}
 
-	void Database::save(const gedcomx::Relationship& relationship, const std::string& sourceId) {
+	void Database::saveRelationshipRow(const gedcomx::Relationship& relationship, const std::string& sourceId) {
 		impl_->save(relationship, sourceId);
 	}
 
 	std::vector<gedcomx::Relationship> Database::loadRelationshipsForPerson(const std::string& personKey) {
 		return impl_->loadRelationshipsForPerson(personKey);
+	}
+
+	void Database::save(const gedcomx::Relationship& relationship, const std::string& sourceId) {
+		impl_->save(relationship, sourceId);
+	}
+
+	void Database::saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId) {
+		impl_->saveAll(relationships, sourceId);
 	}
 	
 	void Database::save(const gedcomx::SourceDescription& source) {

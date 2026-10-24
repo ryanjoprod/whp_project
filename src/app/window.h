@@ -83,16 +83,13 @@ public:
 
 	// Modal window methods
 	void renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources);
-	void requestNewRelationshipModal() { showNewRelationshipModal_ = true; }
-	void renderRelationshipEditorPeopleTab();
-	void renderRelationshipEditorDetailsTab();
 	void renderExportModal(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void requestExportModal() { showExportModal_ = true; }
 	void requestExportSaveDialog(const std::string& suggestedFileName);
 
 	// Modal window state
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
-	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeNewRelationshipRequest();
+	std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> consumeNewRelationshipRequest();
 	std::optional<std::string> consumeExportSourceRequest();
 	std::optional<std::string> consumeExportSavePath();
 
@@ -116,6 +113,12 @@ public:
 	void renderLinkPersonModal();
 	std::optional<std::string> consumeLinkSearchQuery();
 	void setLinkSearchResults(const std::vector<gedcomx::Person>& results);
+
+	// Relationship window
+	void requestNewRelationshipEditor();
+	// void requestEditRelationshipEditor(const gedcomx::Relationship& relationship);
+	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
+	// std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
 
 	// View mode
 	ViewMode viewMode() const { return viewMode_; }
@@ -217,8 +220,8 @@ private:
 	std::string viewModeSourceId_;
 
 	// Modal window stuff 
-	void renderNewSourceModal();
-	void renderNewRelationshipModal();
+	// void renderNewSourceModal();
+	// void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
 
 	// Source Modal state
 	std::string pendingAutoSelectSourceId_;
@@ -268,17 +271,27 @@ private:
 	void renderPersonEditorAddressessTab();
 
 	// Relationship Modal state
+	gedcomx::Relationship workingRelationship_;
 	bool showNewRelationshipModal_ = false;
 	char personSearchBuffer_[2][128] = { "", "" };  // [0] = person1, [1] = person2
 	std::vector<gedcomx::Person> personSearchResults_[2];
 	int selectedPersonIndex_[2] = { -1, -1 };
 	std::optional<std::string> pendingSearchQuery_[2];
 	std::string relationshipSourceId_;  // set once Person 1 is picked; scopes Person 2's search 
+	int relEditingFactIndex_ = -1;
+	int relSelectedFactTypeIndex_ = 0;
+	char relFactTypeCustomBuffer_[256] = "";
+	char relFactDateBuffer_[128] = "";
+	char relFactPlaceBuffer_[128] = "";
 
 	// Relationship Type Modal state
-	char relationshiptypeCustomBuffer_[128] = "";
-	int selectedRelationshipTypeIndex_ = 0;
-	std::optional<std::pair<gedcomx::Relationship, std::string>> newRelationshipResult_;
+	std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> newRelationshipResult_;
+
+	void renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderRelationshipEditorChildrenTab();
+	void renderRelationshipEditorEventsTab();
+	void renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderRelationshipEditorAttributesTab();
 
 	// Export Modal
 	bool showExportModal_ = false;

@@ -110,6 +110,7 @@ void Window::renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescrip
 	ImGui::InputText("Title", primaryTitleBuffer_, sizeof(primaryTitleBuffer_));
 	ImGui::InputText("Nickname", primaryNicknameBuffer_, sizeof(primaryNicknameBuffer_));
 	ImGui::InputText("Call Name", primaryCallNameBuffer_, sizeof(primaryCallNameBuffer_));
+
 	if (ImGui::BeginCombo("Gender", genderIndex_ >= 0 && genderIndex_ < IM_ARRAYSIZE(kGenderTypes)
 		? gedcomx::formatTypeUri(kGenderTypes[genderIndex_]).c_str() : "")) {
 		for (int i = 0; i < IM_ARRAYSIZE(kGenderTypes); ++i) {

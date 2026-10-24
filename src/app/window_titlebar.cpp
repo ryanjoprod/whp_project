@@ -71,7 +71,7 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
                 requestNewPersonEditor();
             }
             if (ImGui::MenuItem("New Relationship...")) {
-                requestNewRelationshipModal();
+                requestNewRelationshipEditor();
             }
             ImGui::EndDisabled();
             ImGui::EndMenu();

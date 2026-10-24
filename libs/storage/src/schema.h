@@ -18,6 +18,70 @@ namespace storage {
 			FOREIGN KEY (source_id) REFERENCES sources(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS person_notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_id TEXT NOT NULL,
+			lang TEXT,
+			subject TEXT,
+			text TEXT,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+		); 	 
+
+		CREATE TABLE IF NOT EXISTS person_facts (
+			row_key TEXT PRIMARY KEY,
+			local_id TEXT,
+			person_id TEXT NOT NULL,
+			type TEXT,
+			date_original TEXT,
+			date_formal TEXT,
+			place_original TEXT,	
+			place_description_id TEXT,
+			value TEXT,
+			confidence TEXT,
+			lang TEXT,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+		);
+
+		CREATE TABLE IF NOT EXISTS person_fact_sources (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_fact_id TEXT NOT NULL,
+			source_description_id TEXT NOT NULL,
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key),
+			FOREIGN KEY (source_description_id) REFERENCES sources(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS person_fact_notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_fact_id TEXT NOT NULL,
+			lang TEXT,
+			subject TEXT,
+			text TEXT,
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key)
+		);
+
+		CREATE TABLE IF NOT EXISTS person_links (
+			aggregate_id TEXT NOT NULL,
+			person_id TEXT NOT NULL,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+		);
+
+		CREATE TABLE IF NOT EXISTS person_attributes (
+			row_key TEXT PRIMARY KEY,
+			person_id TEXT NOT NULL,
+			type TEXT,
+			value TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS person_addresses (
+			row_key TEXT PRIMARY KEY,
+			person_id TEXT NOT NULL,
+			street TEXT,
+			city TEXT,
+			state_or_province TEXT,
+			country TEXT,
+			postal_code TEXT
+		);
+
 		CREATE TABLE IF NOT EXISTS names (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			person_id TEXT NOT NULL,
@@ -40,21 +104,6 @@ namespace storage {
 			value TEXT NOT NULL,
 			type TEXT,
 			FOREIGN KEY (name_form_id) REFERENCES name_forms(id)
-		);	 
-
-		CREATE TABLE IF NOT EXISTS person_facts (
-			row_key TEXT PRIMARY KEY,
-			local_id TEXT,
-			person_id TEXT NOT NULL,
-			type TEXT,
-			date_original TEXT,
-			date_formal TEXT,
-			place_original TEXT,	
-			place_description_id TEXT,
-			value TEXT,
-			confidence TEXT,
-			lang TEXT,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
 		);
 
 		CREATE TABLE IF NOT EXISTS relationships (
@@ -68,6 +117,15 @@ namespace storage {
 			lang TEXT,
 			FOREIGN KEY (person1_id) REFERENCES persons(id),
 			FOREIGN KEY (person2_id) REFERENCES persons(id)
+		); 
+
+		CREATE TABLE IF NOT EXISTS relationship_notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			relationship_id TEXT NOT NULL,
+			lang TEXT,
+			subject TEXT,
+			text TEXT,
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_facts (
@@ -85,37 +143,12 @@ namespace storage {
 			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)
 		);
 
-		CREATE TABLE IF NOT EXISTS person_links (
-			aggregate_id TEXT NOT NULL,
-			person_id TEXT NOT NULL,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
-		);
-
-		CREATE TABLE IF NOT EXISTS person_notes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			person_id TEXT NOT NULL,
-			lang TEXT,
-			subject TEXT,
-			text TEXT,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
-		);
-
-		CREATE TABLE IF NOT EXISTS relationship_notes (
+		CREATE TABLE IF NOT EXISTS relationship_sources (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			relationship_id TEXT NOT NULL,
-			lang TEXT,
-			subject TEXT,
-			text TEXT,
-			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)
-		);
-
-		CREATE TABLE IF NOT EXISTS person_fact_notes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			person_fact_id TEXT NOT NULL,
-			lang TEXT,
-			subject TEXT,
-			text TEXT,
-			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key)
+			source_description_id TEXT NOT NULL,
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key),
+			FOREIGN KEY (source_description_id) REFERENCES sources(id)
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_fact_notes (
@@ -125,6 +158,14 @@ namespace storage {
 			subject TEXT,
 			text TEXT,
 			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key)
+		);
+
+		CREATE TABLE IF NOT EXISTS relationship_fact_sources (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			relationship_fact_id TEXT NOT NULL,
+			source_description_id TEXT NOT NULL,
+			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key),
+			FOREIGN KEY (source_description_id) REFERENCES sources(id)
 		);
 
 		CREATE TABLE IF NOT EXISTS agents (
@@ -249,39 +290,6 @@ namespace storage {
 			subject TEXT,
 			text TEXT,
 			FOREIGN KEY (place_id) REFERENCES places(id)
-		);
-
-		CREATE TABLE IF NOT EXISTS person_fact_sources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			person_fact_id TEXT NOT NULL,
-			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key),
-			FOREIGN KEY (source_description_id) REFERENCES sources(id)
-		);
-
-		CREATE TABLE IF NOT EXISTS relationship_fact_sources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			relationship_fact_id TEXT NOT NULL,
-			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key),
-			FOREIGN KEY (source_description_id) REFERENCES sources(id)
-		);
-
-		CREATE TABLE IF NOT EXISTS person_attributes (
-			row_key TEXT PRIMARY KEY,
-			person_id TEXT NOT NULL,
-			type TEXT,
-			value TEXT
-		);
-
-		CREATE TABLE IF NOT EXISTS person_addresses (
-			row_key TEXT PRIMARY KEY,
-			person_id TEXT NOT NULL,
-			street TEXT,
-			city TEXT,
-			state_or_province TEXT,
-			country TEXT,
-			postal_code TEXT
 		);
 	)";
 }

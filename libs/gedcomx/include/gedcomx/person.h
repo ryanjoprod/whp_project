@@ -55,5 +55,18 @@ namespace gedcomx {
 
 			return "";
 		}
+
+		// Returns the first fact of the given type, or nullptr if there isn't one.
+		// The pointer refers into this Person's own `facts` vector.
+		const Fact* findFact(const std::string& type) const {
+			for (const auto& f : facts) {
+				if (f.type == type) return &f;
+			}
+
+			return nullptr;
+		}
+
+		const Fact* primaryBirthFact() const { return findFact("http://gedcomx.org/Birth"); }
+		const Fact* primaryDeathFact() const { return findFact("http://gedcomx.org/Death"); }
 	};
 }
