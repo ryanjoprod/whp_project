@@ -229,6 +229,7 @@ void Window::renderPersonEditorEventsTab() {
 		if (ImGui::SmallButton("Remove")) {
 			workingPerson_.facts.erase(workingPerson_.facts.begin() + i);
 			if (editingFactIndex_ == i) editingFactIndex_ = -1;
+			else if (editingFactIndex_ > i) --editingFactIndex_;
 			removed = true;
 		}
 		ImGui::PopID();
@@ -346,10 +347,11 @@ void Window::renderPersonEditorAttributesTab() {
 		if (ImGui::SmallButton("Remove")) {
 			workingPerson_.attributes.erase(workingPerson_.attributes.begin() + i);
 			if (editingAttributeIndex_ == i) editingAttributeIndex_ = -1;
+			else if (editingAttributeIndex_ > i) --editingAttributeIndex_;
 			removed = true;
 		}
 		ImGui::PopID();
-		if (remove) true;
+		if (removed) break;
 	}
 
 	ImGui::Separator();
@@ -387,7 +389,7 @@ void Window::renderPersonEditorAttributesTab() {
 	}
 }
 
-void Window::renderPersonEditorAddressessTab() {
+void Window::renderPersonEditorAddressesTab() {
 	for (int i = 0; i < (int)workingPerson_.addresses.size(); ++i) {
 		ImGui::PushID(i);
 		const auto& addr = workingPerson_.addresses[i];
@@ -406,6 +408,7 @@ void Window::renderPersonEditorAddressessTab() {
 		if (ImGui::SmallButton("Remove")) {
 			workingPerson_.addresses.erase(workingPerson_.addresses.begin() + i);
 			if (editingAddressIndex_ == i) editingAddressIndex_ = -1;
+			else if (editingAddressIndex_ > i) --editingAddressIndex_;
 			removed = true;
 		}
 		ImGui::PopID();
@@ -481,7 +484,7 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("Addresses")) {
-				renderPersonEditorAddressessTab();
+				renderPersonEditorAddressesTab();
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();

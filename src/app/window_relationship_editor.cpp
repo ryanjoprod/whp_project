@@ -180,6 +180,7 @@ void Window::renderRelationshipEditorEventsTab() {
         if (ImGui::SmallButton("Remove")) {
             workingRelationship_.facts.erase(workingRelationship_.facts.begin() + i);
             if (relEditingFactIndex_ == i) relEditingFactIndex_ = -1;
+            else if (relEditingFactIndex_ > i) --relEditingFactIndex_;
             removed = true;
         }
         ImGui::PopID();

@@ -271,7 +271,7 @@ private:
 	void renderPersonEditorNamesTab();
 	void renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderPersonEditorAttributesTab();
-	void renderPersonEditorAddressessTab();
+	void renderPersonEditorAddressesTab();
 
 	// Relationship Modal state
 	gedcomx::Relationship workingRelationship_;
