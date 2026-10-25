@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <set>
+
 #include "storage/database.h"
 #include "gedcomx/parser.h"
 
@@ -35,8 +37,10 @@ TEST_CASE("Source export gathers and serializes correctly") {
 	REQUIRE(exportData.relationships.size() == 1);
 
 	// Confirm ids were correctly stripped back to bare local ids, not row-keys.
-	CHECK(exportData.persons[0].id != "S1:P1");
-	CHECK(exportData.relationships[0].person1Id == "S1:P1");
+	std::set<std::string> ids{ exportData.persons[0].id, exportData.persons[1].id };
+	CHECK(ids == std::set<std::string>{ "P1", "P2" });
+	CHECK(exportData.relationships[0].person1Id == "P1");
+	CHECK(exportData.relationships[0].person2Id == "P2");
 
 	nlohmann::json doc = gedcomx::serializeSourceExport(source, exportData.persons, exportData.relationships);
 	auto reparsedPersons = gedcomx::parsePersons(doc);
@@ -44,6 +48,6 @@ TEST_CASE("Source export gathers and serializes correctly") {
 
 	REQUIRE(reparsedPersons.size() == 2);
 	REQUIRE(reparsedRels.size() == 1);
-	CHECK(reparsedRels[0].person1Id == "S1:P1");
-	CHECK(reparsedRels[0].person2Id == "S1:P2");
+	CHECK(reparsedRels[0].person1Id == "P1");
+	CHECK(reparsedRels[0].person2Id == "P2");
 }

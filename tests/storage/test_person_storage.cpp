@@ -126,3 +126,31 @@ TEST_CASE("Person round-trip: gender, extended name fields, attributes, addresse
 	REQUIRE(loaded->addresses.size() == 1);
 	CHECK(loaded->addresses[0].city == "Springfield");
 }
+
+TEST_CASE("Resaving a person does not leave stale facts behind") {
+	storage::Database db(":memory:");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+
+	gedcomx::Fact birth;
+	birth.id = "F1";
+	birth.type = "http://gedcomx.org/Birth";
+	gedcomx::Fact death;
+	death.id = "F2";
+	death.type = "http://gedcomx.org/Death";
+	p1.facts = { birth, death };
+	db.save(p1, "S1");
+
+	auto before = db.loadPerson("S1:P1");
+	REQUIRE(before.has_value());
+	REQUIRE(before->facts.size() == 2);
+
+	p1.facts.pop_back();
+	db.save(p1, "S1");
+
+	auto after = db.loadPerson("S1:P1");
+	REQUIRE(after.has_value());
+	REQUIRE(after->facts.size() == 1);
+	CHECK(after->facts[0].type == "http://gedcomx.org/Birth");
+}

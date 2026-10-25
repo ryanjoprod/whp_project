@@ -47,6 +47,7 @@ TEST_CASE("Relationship round-trip through storage correctly") {
 	fact.type = "http://gedcomx.org/Marriage";
 	rel.facts.push_back(fact);
 
+	// save() takes local ids and prefixes the source; load returns row keys.
 	db.save(rel, "S1");
 
 	auto loaded = db.loadPerson("S1:P1");
@@ -94,10 +95,6 @@ TEST_CASE("Relationship sources round-trip through stoage correctly") {
 	fact.id = "F1";
 	fact.type = "http://gedcomx.org/Marriage";
 	rel.facts.push_back(fact);
-
-	gedcomx::SourceDescription src;
-	src.id = "SD1";
-	src.titles.push_back({ "JPS Tanakh" });
 
 	gedcomx::SourceReference srcRef;
 	srcRef.sourceDescriptionId = "SD1";
@@ -179,4 +176,42 @@ TEST_CASE("Family relationship saveAll() correctly saves all relationships") {
 	CHECK(loadedRels[1].type == "http://gedcomx.org/ParentChild");
 	CHECK(loadedRels[1].person1Id == "S1:P1");
 	CHECK(loadedRels[1].person2Id == "S1:P3");
+}
+
+TEST_CASE("Round-trip edits don't contain stale facts") {
+	storage::Database db(":memory:");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p1, "S1");
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = p1.id;  // local ids go in; row keys come out
+	rel.person2Id = p2.id;
+
+	gedcomx::Fact marriage;
+	marriage.id = "F1";
+	marriage.type = "http://gedcomx.org/Marriage";
+	gedcomx::Fact divorce;
+	divorce.id = "F2";
+	divorce.type = "http://gedcomx.org/Divorce";
+	rel.facts = { marriage, divorce };
+	db.save(rel, "S1");
+
+	auto before = db.loadRelationshipsForPerson("S1:P1");
+	REQUIRE(before.size() == 1);
+	REQUIRE(before[0].facts.size() == 2);  // proves the setup
+
+	rel.facts.pop_back();  // simulate removing an event in the editor
+	db.save(rel, "S1");
+
+	auto after = db.loadRelationshipsForPerson("S1:P1");
+	REQUIRE(after.size() == 1);  // still one relationship, not a duplicate
+	REQUIRE(after[0].facts.size() == 1);  // the removed event stays removed
+	CHECK(after[0].facts[0].type == "http://gedcomx.org/Marriage");
 }

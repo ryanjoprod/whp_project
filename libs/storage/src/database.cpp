@@ -37,6 +37,11 @@ namespace storage {
 
 			// Clear old names for this person before re-inseting (simple
 			// replace-all strategy; fine until incremental updates matter).
+			// The code below fixes leaving orphaned data
+			const std::string oldNames = "(SELECT id FROM names WHERE person_id = '" + key + "')";
+			const std::string oldForms = "(SELECT id FROM name_forms WHERE name_id IN " + oldNames + ")";
+			exec("DELETE FROM name_parts WHERE name_form_id IN " + oldForms + ";");
+			exec("DELETE FROM name_forms WHERE name_id IN " + oldNames + ";");
 			exec("DELETE FROM names WHERE person_id = '" + key + "';");
 
 			for (const auto& name : person.names) {
@@ -71,7 +76,12 @@ namespace storage {
 				}
 			}
 
+			// Cleans up orphaned data before saving
+			const std::string oldFacts = "(SELECT row_key FROM person_facts WHERE person_id = '" + key + "')";
+			exec("DELETE FROM person_fact_sources WHERE person_fact_id IN " + oldFacts + ";");
+			exec("DELETE FROM person_fact_notes WHERE person_fact_id IN " + oldFacts + ";");
 			exec("DELETE FROM person_facts WHERE person_id = '" + key + "';");
+
 			for (const auto& fact : person.facts) {
 				std::string factKey = rowKey(key, fact.id);
 				upsert("INSERT OR REPLACE INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
@@ -651,6 +661,8 @@ namespace storage {
 			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM  relationships WHERE source_id = '" + sourceId + "';",
 				[&](sqlite3_stmt* s) {
 					gedcomx::Relationship rel = loadRelationshipRow(s);
+					rel.person1Id = stripRowKeyPrefix(rel.person1Id, sourceId);
+					rel.person2Id = stripRowKeyPrefix(rel.person2Id, sourceId);
 					result.relationships.push_back(std::move(rel));
 				});
 
