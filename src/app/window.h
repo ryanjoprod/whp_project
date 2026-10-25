@@ -167,6 +167,9 @@ private:
 	// Node drag state
 	std::string draggedNodeId_;
 	ImVec2 dragStartMousePos_;  // used to distinguish click from drag
+	ImVec2 rightClickStartPos_;
+	bool rightClickArmed_ = false;  // press started on the canvas3
+	std::optional<gedcomx::Relationship> contextRelationship_;  // copy, not a pointer
 
 	// Fact display state
 	std::string selectedPersonId_;

@@ -7,6 +7,19 @@
 #include "id_generator.h"
 #include "storage/database.h"
 
+namespace {
+    // Squared disatnce from point p to segment ab (all in screen space)
+    float distSqToSegment(ImVec2 p, ImVec2 a, ImVec2 b) {
+        float abx = b.x - a.x, aby = b.y - a.y;
+        float lenSq = abx * abx + aby * aby;
+        float t = lenSq > 0.0f ? ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq : 0.0f;
+        t = std::clamp(t, 0.0f, 1.0f);  // keep the closest point on the segment, not the infinite line
+        float cx = a.x + t * abx - p.x;
+        float cy = a.y + t * aby - p.y;
+        return cx * cx + cy * cy;
+    }
+}
+
 void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
     static std::mt19937 rng(12345);
     std::uniform_real_distribution<float> jitter(-50.0f, 50.0f);
@@ -202,6 +215,53 @@ void Window::renderCanvas(
         }
     }
 
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImGui::IsWindowHovered()) {
+        rightClickStartPos_ = mousePos;
+        rightClickArmed_ = true;
+    }
+
+    if (rightClickArmed_ && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+        rightClickArmed_ = false;
+        float mdx = mousePos.x - rightClickStartPos_.x;
+        float mdy = mousePos.y - rightClickStartPos_.y;
+        bool wasClick = mdx * mdx + mdy * mdy <= clickMoveTolerance * clickMoveTolerance;
+
+        if (wasClick && ImGui::IsWindowHovered()) {
+            // Nodes win over lines (and are reserved for a future node menu).
+            bool onNode = false;
+            for (const auto& person : people) {
+                ImVec2 sp = camera_.worldToScreen(nodePositions_[person.id]);
+                float dx = mousePos.x - sp.x, dy = mousePos.y - sp.y;
+                float r = nodeRadius * camera_.zoom();
+                if (dx * dx + dy * dy <= r * r) {
+                    onNode = true;
+                    break;
+                }
+            }
+
+            if (!onNode) {
+                const float lineHitRadius = 6.0f;
+                float bestSq = lineHitRadius * lineHitRadius;
+                const gedcomx::Relationship* best = nullptr;
+                for (const auto& rel : relationships) {
+                    if (rel.type != "http://gedcomx.org/Couple") continue;  // only couples are editable
+                    auto it1 = nodePositions_.find(rel.person1Id);
+                    auto it2 = nodePositions_.find(rel.person2Id);
+                    if (it1 == nodePositions_.end() || it2 == nodePositions_.end()) continue;
+                    float d = distSqToSegment(mousePos, camera_.worldToScreen(it1->second), camera_.worldToScreen(it2->second));
+                    if (d <= bestSq) {
+                        bestSq = d;
+                        best = &rel;
+                    }
+                }
+                if (best) {
+                    contextRelationship_ = *best;
+                    ImGui::OpenPopup("RelationshipContext");
+                }
+            }
+        }
+    }
+
     for (const auto& rel : relationships) {
         auto it1 = nodePositions_.find(rel.person1Id);
         auto it2 = nodePositions_.find(rel.person2Id);
@@ -224,6 +284,26 @@ void Window::renderCanvas(
             ImVec2 textPos(screenPos.x - textSize.x * 0.5f, screenPos.y - textSize.y * 0.5);
             drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), label.c_str());
         }
+    }
+
+    if (ImGui::BeginPopup("RelationshipContext")) {
+        auto findPerson = [&](const std::string& id) {
+            return std::find_if(people.begin(), people.end(),
+                [&](const gedcomx::Person& p) {
+                    return p.id == id;
+                });
+        };
+        if (contextRelationship_) {
+            auto p1 = findPerson(contextRelationship_->person1Id);
+            auto p2 = findPerson(contextRelationship_->person2Id);
+            bool both = p1 != people.end() && p2 != people.end();
+            ImGui::BeginDisabled(!both);
+            if (ImGui::MenuItem("Edit Relationship...") && both) {
+                requestEditRelationshipEditor(*contextRelationship_, *p1, *p2);
+            }
+            ImGui::EndDisabled();
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::End();
