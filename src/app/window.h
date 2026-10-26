@@ -24,7 +24,7 @@
 class Window {
 public:
 	Window();
-	~Window();
+	~Window();																				   
 
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
@@ -283,6 +283,7 @@ private:
 	std::string relationshipSourceId_;  // set once Person 1 is picked; scopes Person 2's search 
 	int relEditingFactIndex_ = -1;
 	int relSelectedFactTypeIndex_ = 0;
+	int relSelectedSourceToAddIndex_ = -1;
 	char relFactTypeCustomBuffer_[256] = "";
 	char relFactDateBuffer_[128] = "";
 	char relFactPlaceBuffer_[128] = "";

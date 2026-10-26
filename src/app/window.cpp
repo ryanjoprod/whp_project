@@ -1,6 +1,7 @@
 #include <stdexcept>
 
 #include "window.h"
+#include "logger.h"
 
 Window::Window() {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -18,6 +19,9 @@ Window::Window() {
 		SDL_DestroyWindow(window_);
 		SDL_Quit();
 		throw std::runtime_error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
+	}
+	if (!SDL_SetRenderVSync(renderer_, 1)) {
+		Logger::log(LogLevel::Warning, std::string("Could not enable vsync: ") + SDL_GetError());
 	}
 
 	IMGUI_CHECKVERSION();
@@ -63,5 +67,6 @@ void Window::endFrame() {
 	SDL_SetRenderDrawColor(renderer_, 30, 30, 30, 255);
 	SDL_RenderClear(renderer_);
 	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer_);
-	SDL_RenderPresent(renderer_);
+	// SDL_RenderPresent(renderer_);
+	if (!SDL_RenderPresent(renderer_)) Logger::log(LogLevel::Error, std::string("RenderPresent failed: ") + SDL_GetError());
 }

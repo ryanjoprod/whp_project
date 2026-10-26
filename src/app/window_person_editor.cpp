@@ -115,7 +115,7 @@ void Window::renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescrip
 		? gedcomx::formatTypeUri(kGenderTypes[genderIndex_]).c_str() : "")) {
 		for (int i = 0; i < IM_ARRAYSIZE(kGenderTypes); ++i) {
 			std::string label = gedcomx::formatTypeUri(kGenderTypes[i]);
-			if (ImGui::Selectable(label.c_str(), i == genderIndex_)) genderIndex_ = 1;
+			if (ImGui::Selectable(label.c_str(), i == genderIndex_)) genderIndex_ = i;
 		}
 		ImGui::EndCombo();
 	}
@@ -307,7 +307,7 @@ void Window::renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDes
 
 	ImGui::Separator();
 	if (ImGui::BeginCombo("##addSourceCombo",
-		selectedSourceToAddIndex_ >= 0 && selectedSourceToAddIndex_ >= (int)knownSources.size()
+		selectedSourceToAddIndex_ >= 0 && selectedSourceToAddIndex_ < (int)knownSources.size()
 		? knownSources[selectedSourceToAddIndex_].primaryTitle().c_str() : "Select a source to cite...")) {
 		renderSelectableList<gedcomx::SourceDescription>(
 			knownSources, &selectedSourceToAddIndex_,

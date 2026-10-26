@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "window.h"
 #include "id_generator.h"
 #include "storage/database.h"
@@ -229,7 +231,50 @@ void Window::renderRelationshipEditorEventsTab() {
     }
 }
 
-void Window::renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources) {}
+void Window::renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources) {
+    auto& sources = workingRelationship_.conclusion.sources;
+
+    for (int i = 0; i < (int)sources.size(); ++i) {
+        ImGui::PushID(i);
+        const auto& ref = sources[i];
+        auto it = std::find_if(knownSources.begin(), knownSources.end(),
+            [&](const gedcomx::SourceDescription& s) {
+                return s.id == ref.sourceDescriptionId;
+        });
+        std::string label = it != knownSources.end() ? it->primaryTitle() : ref.sourceDescriptionId;
+        ImGui::BulletText("%s", label.c_str());
+        ImGui::SameLine();
+        bool removed = false;
+        if (ImGui::SmallButton("Remove")) {
+            sources.erase(sources.begin() + i);
+            removed = true;
+        }
+        ImGui::PopID();
+        if (removed) break;
+    }
+
+    ImGui::Separator();
+    bool validSelection = relSelectedSourceToAddIndex_ >= 0 && relSelectedSourceToAddIndex_ < (int)knownSources.size();
+    std::string preview = validSelection ? knownSources[relSelectedSourceToAddIndex_].primaryTitle() : "Select a source to cite...";
+    if (ImGui::BeginCombo("##addRelSourceCombo", preview.c_str())) {
+        renderSelectableList<gedcomx::SourceDescription>(
+            knownSources, &relSelectedSourceToAddIndex_,
+            [](const gedcomx::SourceDescription& s) { return s.primaryTitle(); },
+            [](const gedcomx::SourceDescription& s) { return s.id; }
+        );
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!validSelection);
+    if (ImGui::Button("Add Citation")) {
+        const std::string& id = knownSources[relSelectedSourceToAddIndex_].id;
+        bool exists = std::any_of(sources.begin(), sources.end(),
+            [&](const gedcomx::SourceReference& r) { return r.sourceDescriptionId == id; });
+        if (!exists) sources.push_back({ id });
+        relSelectedSourceToAddIndex_ = -1;
+    }
+    ImGui::EndDisabled();
+}
 
 void Window::renderRelationshipEditorAttributesTab() {}
 
@@ -243,6 +288,9 @@ void Window::requestNewRelationshipEditor() {
         pendingSearchQuery_[i].reset();
     }
     relationshipSourceId_.clear();
+    relSelectedSourceToAddIndex_ = -1;
+
+    editingExistingRelationship_ = false;
 
     showNewRelationshipModal_ = true;
 }
@@ -259,9 +307,10 @@ void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, con
         selectedPersonIndex_[i] = 0;
         pendingSearchQuery_[i].reset();
     }
-    editingExistingRelationship_ = false;
+    
     relEditingFactIndex_ = -1;
     relSelectedFactTypeIndex_ = 0;
+    relSelectedSourceToAddIndex_ = -1;
     relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
 
     showNewRelationshipModal_ = true;

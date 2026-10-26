@@ -148,8 +148,9 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 		if (currentDepth >= depth && !viaLink) continue;  //stop expanding past the requested depth
 
 		for (const auto& rel : db_->loadRelationshipsForPerson(personKey)) {
-			if (visitedRelationships.insert(rel.id).second) {
-				visibleRelationshipsMap_[rel.id] = rel;
+			const std::string relKey = rel.sourceId + ":" + rel.id;
+			if (visitedRelationships.insert(relKey).second) {
+				visibleRelationshipsMap_[relKey] = rel;
 			}
 
 			// Whichever side isn't the person we came from is the neighbor to explore next.
@@ -497,6 +498,7 @@ void App::run() {
 				if (!newRoot.empty()) {
 					currentRootKey_ = newRoot;
 					loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+					saveProject();
 				}
 			}
 			catch (const std::exception& e) {
@@ -509,6 +511,7 @@ void App::run() {
 			try {
 				currentRootKey_ = requestedRoot;
 				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+				saveProject();
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load neighborhood: ") + e.what());
@@ -534,12 +537,19 @@ void App::run() {
 
 				db_->save(person, sourceId);
 
-				if (!wasAlreadyVisible) {
-					currentRootKey_ = rowKey;
+				if (wasAlreadyVisible) {
+					// loadNeighborhood only refreshes people it walks to, so update this one explicitly
+					if (auto fresh = db_->loadPerson(rowKey)) visiblePeopleMap_[rowKey] = *fresh;
 				}
+				else {
+					currentRootKey_ = rowKey;
+					saveProject();
+				}
+
 				if (!currentRootKey_.empty()) {
 					loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 				}
+				else rebuildVisibleVectors();
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Faield to save person: ") + e.what());
@@ -660,5 +670,12 @@ void App::run() {
 				Logger::log(LogLevel::Error, std::string("Failed to link persons: ") + e.what());
 			}
 		}
+	}
+
+	try {
+		saveProject();
+	}
+	catch (const std::exception& e) {
+		Logger::log(LogLevel::Error, std::string("Failed to save project on exit: ") + e.what());
 	}
 }
