@@ -23,7 +23,7 @@ namespace storage {
 
 		void save(const gedcomx::Person& person, const std::string& sourceId) {
 			std::string key = rowKey(sourceId, person.id);
-			exec("BEGIN TRANSACTION;");
+			Transaction tx(*this);
 
 			upsert("INSERT OR REPLACE INTO persons (row_key, local_id, source_id, confidence, lang, gender) VALUES (?, ?, ?, ?, ?, ?);",
 				[&](sqlite3_stmt* s) {
@@ -115,7 +115,7 @@ namespace storage {
 			saveAddressesFor(key, person.addresses);
 			saveAttributesFor(key, person.attributes);
 
-			exec("COMMIT;");
+			tx.commit();
 		}
 
 		std::vector<gedcomx::Person> loadAll() {
@@ -314,17 +314,17 @@ namespace storage {
 		}
 
 		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
-			exec("BEGIN TRANSACTION;");
+			Transaction tx(*this);
 			saveRelationshipRow(rel, sourceId);
-			exec("COMMIT;");
+			tx.commit();
 		}
 
 		void saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId) {
-			exec("BEGIN TRANSACTION;");
+			Transaction tx(*this);
 			for (const auto& rel : relationships) {
 				saveRelationshipRow(rel, sourceId);
 			}
-			exec("COMMIT;");
+			tx.commit();
 		}
 
 		void save(const gedcomx::SourceDescription& source) {
@@ -733,6 +733,31 @@ namespace storage {
 
 	private:
 		sqlite3* db_ = nullptr;
+
+		// Rolls back automatically if an exception skips commit()
+		struct Transaction {
+			explicit Transaction(Impl& impl) : impl_(impl) {
+				impl_.exec("BEGIN TRANSACTION;");
+			}
+			~Transaction() {
+				if (!committed_) {
+					try {
+						impl_.exec("ROLLBACK;");
+					}
+					catch (...) {}
+				}
+			}
+			void commit() {
+				impl_.exec("COMMIT;");
+				committed_ = true;
+			}
+
+			Transaction(const Transaction&) = delete;
+			Transaction& operator=(const Transaction&) = delete;
+		private:
+			Impl& impl_;
+			bool committed_ = false;
+		};
 
 		static std::string rowKey(const std::string& sourceId, const std::string& localId) {
 			return sourceId + ":" + localId;

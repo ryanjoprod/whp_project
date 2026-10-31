@@ -23,14 +23,14 @@ TEST_CASE("Relationship round-trip through storage correctly") {
 
 	gedcomx::Person person2;
 	person2.id = "P2";
-	person2.conclusion.confidence = "http://gedcomx.org/Given";
+	person2.conclusion.confidence = "http://gedcomx.org/Medium";
 	person2.conclusion.lang = "en";
 	person2.conclusion.notes.push_back({ "en", "", "Test note 2" });
 
 	gedcomx::Name name2;
 	gedcomx::NameForm form2;
 	form2.fullText = "Eve";
-	form2.parts.push_back({ "Eve", "http://gedcomx.org/High" });
+	form2.parts.push_back({ "Eve", "http://gedcomx.org/Given" });
 	name2.nameForms.push_back(form2);
 	person2.names.push_back(name2);
 
@@ -64,7 +64,7 @@ TEST_CASE("Relationship round-trip through storage correctly") {
 	CHECK(loadedRels[0].facts[0].type == "http://gedcomx.org/Marriage");
 }
 
-TEST_CASE("Relationship sources round-trip through stoage correctly") {
+TEST_CASE("Relationship sources round-trip through storage correctly") {
 	storage::Database db(":memory:");
 
 	gedcomx::Person person1;
@@ -86,7 +86,6 @@ TEST_CASE("Relationship sources round-trip through stoage correctly") {
 	gedcomx::Relationship rel;
 	rel.id = "R1";
 	rel.type = "http://gedcomx.org/Couple";
-	rel.sourceId = "SD1";
 	rel.person1Id = "P1";
 	rel.person2Id = "P2";
 	rel.conclusion.confidence = "http://gedcomx.org/High";
@@ -176,6 +175,11 @@ TEST_CASE("Family relationship saveAll() correctly saves all relationships") {
 	CHECK(loadedRels[1].type == "http://gedcomx.org/ParentChild");
 	CHECK(loadedRels[1].person1Id == "S1:P1");
 	CHECK(loadedRels[1].person2Id == "S1:P3");
+
+	auto p3Rels = db.loadRelationshipsForPerson("S1:P3");
+	REQUIRE(p3Rels.size() == 2);			// R2 and R3: proves the whole batch was written
+	CHECK(p3Rels[0].person1Id == "S1:P1");	// ordered by row_key: R2, then R3
+	CHECK(p3Rels[1].person1Id == "S1:P2");
 }
 
 TEST_CASE("Round-trip edits don't contain stale facts") {
@@ -214,4 +218,43 @@ TEST_CASE("Round-trip edits don't contain stale facts") {
 	REQUIRE(after.size() == 1);  // still one relationship, not a duplicate
 	REQUIRE(after[0].facts.size() == 1);  // the removed event stays removed
 	CHECK(after[0].facts[0].type == "http://gedcomx.org/Marriage");
+}
+
+TEST_CASE("Resaving a relationship replaces its citations") {
+	storage::Database db(":memory:");
+
+	auto saveSource = [&](const std::string& id) {
+		gedcomx::SourceDescription s;
+		s.id = id;
+		s.titles.push_back({ "", id });
+		db.save(s);
+	};
+	saveSource("S1");
+	saveSource("SD1");
+	saveSource("SD2");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p1, "S1");
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = "P1";
+	rel.person2Id = "P2";
+	rel.conclusion.sources = { { "SD1" },{ "SD2" } };
+	db.save(rel, "S1");
+
+	REQUIRE(db.loadRelationshipsForPerson("S1:P1")[0].conclusion.sources.size() == 2);
+
+	rel.conclusion.sources.pop_back();  // user removes a citation in the editor
+	db.save(rel, "S1");
+
+	auto after = db.loadRelationshipsForPerson("S1:P1");
+	REQUIRE(after.size() == 1);
+	REQUIRE(after[0].conclusion.sources.size() == 1);
+	CHECK(after[0].conclusion.sources[0].sourceDescriptionId == "SD1");
 }
