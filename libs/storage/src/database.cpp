@@ -12,7 +12,7 @@ namespace storage {
 			if (sqlite3_open(path.c_str(), &db_) != SQLITE_OK) {
 				throw std::runtime_error("Failed to open database: " + path);
 			}
-			createSchema();
+			ensureSchemaVersion();
 		}
 
 		~Impl() {
@@ -25,7 +25,9 @@ namespace storage {
 			std::string key = rowKey(sourceId, person.id);
 			Transaction tx(*this);
 
-			upsert("INSERT OR REPLACE INTO persons (row_key, local_id, source_id, confidence, lang, gender) VALUES (?, ?, ?, ?, ?, ?);",
+			upsert("INSERT INTO persons (row_key, local_id, source_id, confidence, lang, gender) VALUES (?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(row_key) "
+				"DO UPDATE SET local_id = excluded.local_id, source_id = excluded.source_id, confidence = excluded.confidence, lang = excluded.lang, gender = excluded.gender;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, key);
 					bindText(s, 2, person.id);
@@ -82,12 +84,14 @@ namespace storage {
 			exec("DELETE FROM person_fact_notes WHERE person_fact_id IN " + oldFacts + ";");
 			exec("DELETE FROM person_facts WHERE person_id = '" + key + "';");
 
-			for (const auto& fact : person.facts) {
-				std::string factKey = rowKey(key, fact.id);
+			for (size_t i = 0; i < person.facts.size(); ++i) {
+				const auto& fact = person.facts[i];
+				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
+				std::string factKey = rowKey(key, localId);
 				upsert("INSERT OR REPLACE INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
-						bindText(s, 2, fact.id);
+						bindText(s, 2, localId);
 						bindText(s, 3, key);
 						bindText(s, 4, fact.type);
 						bindText(s, 5, fact.date.original);
@@ -244,7 +248,10 @@ namespace storage {
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
 			std::string p2Key = rowKey(sourceId, rel.person2Id);
 
-			upsert("INSERT OR REPLACE INTO relationships (row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+			upsert("INSERT INTO relationships (row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(row_key) "
+				"DO UPDATE SET local_id = excluded.local_id, source_id = excluded.source_id, type = excluded.type, person1_id = excluded.person1_id, "
+				"person2_id = excluded.person2_id, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, relKey);
 					bindText(s, 2, rel.id);
@@ -270,12 +277,14 @@ namespace storage {
 			exec("DELETE FROM relationship_fact_notes WHERE relationship_fact_id IN " + oldFacts + ";");
 			exec("DELETE FROM relationship_facts WHERE relationship_id = '" + relKey + "';");
 
-			for (const auto& fact : rel.facts) {
-				std::string factKey = rowKey(relKey, fact.id);
+			for (size_t i = 0; i < rel.facts.size(); ++i) {
+				const auto& fact = rel.facts[i];
+				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
+				std::string factKey = rowKey(relKey, localId);
 				upsert("INSERT OR REPLACE INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
-						bindText(s, 2, fact.id);
+						bindText(s, 2, localId);
 						bindText(s, 3, relKey);
 						bindText(s, 4, fact.type);
 						bindText(s, 5, fact.date.original);
@@ -328,7 +337,9 @@ namespace storage {
 		}
 
 		void save(const gedcomx::SourceDescription& source) {
-			upsert("INSERT OR REPLACE INTO sources (id, title, citation) VALUES (?, ?, ?);",
+			upsert("INSERT INTO sources (id, title, citation) VALUES (?, ?, ?) "
+				"ON CONFLICT(id) "
+				"DO UPDATE SET title = excluded.title, citation = excluded.citation;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, source.id);
 					bindText(s, 2, source.primaryTitle());
@@ -352,7 +363,7 @@ namespace storage {
 		}
 
 		void save(const gedcomx::Agent& agent) {
-			upsert("INSERT OR REPLACE INTO agents (id) VALUES (?);",
+			upsert("INSERT OR IGNORE INTO agents (id) VALUES (?);",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, agent.id);
 				});
@@ -441,8 +452,11 @@ namespace storage {
 		}
 
 		void save(const gedcomx::Event& event) {
-			upsert("INSERT OR REPLACE INTO events (row_key, local_id, type, date_original, date_formal, place_original, confidence, lang) "
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+			upsert("INSERT INTO events (row_key, local_id, type, date_original, date_formal, place_original, confidence, lang) "
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(row_key) "
+				"DO UPDATE SET local_id = excluded.local_id, type = excluded.type, date_original = excluded.date_original, date_formal = excluded.date_formal, "
+				"place_original = excluded.place_original, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, event.id);
 					bindText(s, 2, event.id);
@@ -516,7 +530,10 @@ namespace storage {
 		}
 
 		void save(const gedcomx::Document& doc) {
-			upsert("INSERT OR REPLACE INTO documents (id, type, text_type, extracted, text, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?);",
+			upsert("INSERT INTO documents (id, type, text_type, extracted, text, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(id) "
+				"DO UPDATE SET type = excluded.type, text_type = excluded.text_type, extracted = excluded.extracted, "
+				"text = exluded.text, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, doc.id);
 					bindText(s, 2, doc.type);
@@ -553,7 +570,10 @@ namespace storage {
 		}
 	
 		void save(const gedcomx::PlaceDescription& place) {
-			upsert("INSERT OR REPLACE INTO places (id, type, latitude, longitude, jurisdiction_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?);",
+			upsert("INSERT INTO places (id, type, latitude, longitude, jurisdiction_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(id) "
+				"DO UPDATE SET type = excluded.type, latitude = excluded.latitude, longitude = excluded.longitude, "
+				"jurisdiction_id = excluded.jurisdiction_id, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, place.id);
 					bindText(s, 2, place.type);
@@ -765,6 +785,24 @@ namespace storage {
 
 		static std::string stripSourcePrefix(const std::string& key, const std::string& sourceId) {
 			return key.substr(sourceId.size() + 1);
+		}
+
+		void ensureSchemaVersion() {
+			int version = 0, tableCount = 0;
+
+			query("PRAGMA user_version;", [&](sqlite3_stmt* s) {
+				version = sqlite3_column_int(s, 0);
+			});
+			query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+				[&](sqlite3_stmt* s) {
+					tableCount = sqlite3_column_int(s, 0);
+			});
+
+			if (tableCount > 0 && version < kSchemaVersion) {
+				throw std::runtime_error("This project uses an older database format (v" + std::to_string(version) + "). Please create a new project.");
+			}
+			createSchema();
+			if (tableCount == 0) exec("PRAGMA user_version = " + std::to_string(kSchemaVersion) + ";");
 		}
 
 		void createSchema() {

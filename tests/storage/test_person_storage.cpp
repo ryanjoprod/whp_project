@@ -1,10 +1,13 @@
 #include <doctest/doctest.h>
 
+#include "test_helpers.h"
 #include "storage/database.h"
 #include "gedcomx/person.h"
 
 TEST_CASE("Person round-trips through storage correctly") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
 
 	gedcomx::Person person;
 	person.id = "P1";
@@ -50,6 +53,8 @@ TEST_CASE("Person round-trips through storage correctly") {
 TEST_CASE("Re-saving a person upserts rather than duplicates") {
 	storage::Database db(":memory:");
 
+	testutil::saveSource(db, "S1");
+
 	gedcomx::Person person;
 	person.id = "P1";
 	person.names.push_back({});
@@ -67,6 +72,8 @@ TEST_CASE("Re-saving a person upserts rather than duplicates") {
 
 TEST_CASE("Adding a fact via re-save preserves existing facts") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
 
 	gedcomx::Person person;
 	person.id = "P1";
@@ -97,6 +104,8 @@ TEST_CASE("Adding a fact via re-save preserves existing facts") {
 
 TEST_CASE("Person round-trip: gender, extended name fields, attributes, addresses") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
 
 	gedcomx::Person p;
 	p.id = "P1";
@@ -130,6 +139,8 @@ TEST_CASE("Person round-trip: gender, extended name fields, attributes, addresse
 TEST_CASE("Resaving a person does not leave stale facts behind") {
 	storage::Database db(":memory:");
 
+	testutil::saveSource(db, "S1");
+
 	gedcomx::Person p1;
 	p1.id = "P1";
 
@@ -153,4 +164,23 @@ TEST_CASE("Resaving a person does not leave stale facts behind") {
 	REQUIRE(after.has_value());
 	REQUIRE(after->facts.size() == 1);
 	CHECK(after->facts[0].type == "http://gedcomx.org/Birth");
+}
+
+TEST_CASE("Facts without ids are all kept") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p;
+	p.id = "P1";
+	gedcomx::Fact a;
+	a.type = "http://gedcomx.org/Birth";  // no id
+	gedcomx::Fact b;
+	b.type = "http://gedcomx.org/Death";  // no id
+	p.facts = { a, b };
+	db.save(p, "S1");
+
+	auto loaded = db.loadPerson("S1:P1");
+	REQUIRE(loaded.has_value());
+	CHECK(loaded->facts.size() == 2);
 }

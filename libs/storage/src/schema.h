@@ -1,6 +1,9 @@
 #pragma once
 
 namespace storage {
+	// Database schema version
+	constexpr int kSchemaVersion = 2;
+
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
 			id TEXT PRIMARY KEY,

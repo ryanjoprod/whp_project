@@ -2,10 +2,14 @@
 
 #include <algorithm>
 
+#include "test_helpers.h"
 #include "storage/database.h"
 
 TEST_CASE("getAggregateIdForPerson resolves linked and unlinked persons correctly") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "S2");
 
 	gedcomx::Person p1;
 	p1.id = "P1";
@@ -36,6 +40,10 @@ TEST_CASE("getAggregateIdForPerson resolves linked and unlinked persons correctl
 TEST_CASE("Linking a third person to an existing pair joins the same aggregate") {
 	storage::Database db(":memory:");
 
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "S2");
+	testutil::saveSource(db, "S3");
+
 	gedcomx::Person p1;
 	p1.id = "P1";
 	db.save(p1, "S1");
@@ -64,6 +72,10 @@ TEST_CASE("Linking a third person to an existing pair joins the same aggregate")
 
 TEST_CASE("getLinkedPersonKeys finds aall counterparts, excluding self") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "S2");
+	testutil::saveSource(db, "S3");
 
 	gedcomx::Person p1;
 	p1.id = "P1";

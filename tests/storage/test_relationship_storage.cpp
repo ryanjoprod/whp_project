@@ -1,10 +1,13 @@
 #include <doctest/doctest.h>
 
+#include "test_helpers.h"
 #include "storage/database.h"
 #include "gedcomx/relationship.h"
 
 TEST_CASE("Relationship round-trip through storage correctly") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
 	
 	gedcomx::Person person1;
 	person1.id = "P1";
@@ -67,6 +70,9 @@ TEST_CASE("Relationship round-trip through storage correctly") {
 TEST_CASE("Relationship sources round-trip through storage correctly") {
 	storage::Database db(":memory:");
 
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "SD1");
+
 	gedcomx::Person person1;
 	person1.id = "P1";
 	person1.conclusion.confidence = "http://gedcomx.org/High";
@@ -118,6 +124,8 @@ TEST_CASE("Relationship sources round-trip through storage correctly") {
 
 TEST_CASE("Family relationship saveAll() correctly saves all relationships") {
 	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
 
 	std::vector<gedcomx::Relationship> batch;
 
@@ -185,6 +193,8 @@ TEST_CASE("Family relationship saveAll() correctly saves all relationships") {
 TEST_CASE("Round-trip edits don't contain stale facts") {
 	storage::Database db(":memory:");
 
+	testutil::saveSource(db, "S1");
+
 	gedcomx::Person p1;
 	p1.id = "P1";
 	gedcomx::Person p2;
@@ -223,15 +233,9 @@ TEST_CASE("Round-trip edits don't contain stale facts") {
 TEST_CASE("Resaving a relationship replaces its citations") {
 	storage::Database db(":memory:");
 
-	auto saveSource = [&](const std::string& id) {
-		gedcomx::SourceDescription s;
-		s.id = id;
-		s.titles.push_back({ "", id });
-		db.save(s);
-	};
-	saveSource("S1");
-	saveSource("SD1");
-	saveSource("SD2");
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "SD1");
+	testutil::saveSource(db, "SD2");
 
 	gedcomx::Person p1;
 	p1.id = "P1";
