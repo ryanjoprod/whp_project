@@ -306,6 +306,14 @@ void Window::renderCanvas(
             if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                 ImGui::SetTooltip("Switch to All Sources or a single source to edit");
             }
+            ImGui::Separator();
+            ImGui::BeginDisabled(!both || aggregate);
+            if (ImGui::MenuItem("Delete Relationship...") && both && !aggregate) {
+                requestDelete(DeleteRequest::Kind::Relationship,
+                    contextRelationship_->sourceId + ":" + contextRelationship_->id,
+                    p1->primaryFullText() + " and " + p2->primaryFullText());
+            }
+            ImGui::EndDisabled();
         }
         ImGui::EndPopup();
     }
@@ -398,6 +406,14 @@ void Window::renderDetailsPanel(
             if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                 ImGui::SetTooltip("Switch to All Sources or a single source to edit");
             }
+            ImGui::SameLine();
+            ImGui::BeginDisabled(aggregate);
+            if (ImGui::SmallButton("Delete...") && !aggregate) {
+                const std::string partnerName = pit != people.end() ? pit->primaryFullText() : partnerId;
+                requestDelete(DeleteRequest::Kind::Relationship, rel.sourceId + ":" + rel.id,
+                    person.primaryFullText() + " and " + partnerName);
+            }
+            ImGui::EndDisabled();
             ImGui::PopID();
         }
 
@@ -427,6 +443,16 @@ void Window::renderDetailsPanel(
         ImGui::SameLine();
         if (ImGui::Button("Link to another person...")) {
             requestLinkPersonModal(person.id);
+        }
+        ImGui::SameLine();
+        const bool aggregateMode = (viewMode_ == ViewMode::Aggregate);
+        ImGui::BeginDisabled(aggregateMode);
+        if (ImGui::Button("Delete Person...")) {
+            requestDelete(DeleteRequest::Kind::Person, person.id, person.primaryFullText());
+        }
+        ImGui::EndDisabled();
+        if (aggregateMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("Switch to All Sources or a single source to delete");
         }
     }
     ImGui::End();

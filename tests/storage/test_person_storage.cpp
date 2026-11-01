@@ -216,3 +216,48 @@ TEST_CASE("runInTransaction rolls back everything when the work throws") {
 
 	CHECK_NOTHROW(db.save(p, "S1"));  // connection still healthy
 }
+
+TEST_CASE("Deleting a person removes their relationships and links, not their partners") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "S2");
+	testutil::saveSource(db, "SD1");
+
+	for (const char* id : { "P1", "P2", "P3" }) {
+		gedcomx::Person p;
+		p.id = id;
+		db.save(p, "S1");
+	}
+	gedcomx::Person twin;
+	twin.id = "P1";
+	db.save(twin, "S2");
+	db.linkPersons("AGG1", { { "S1", "P1" },{ "S2", "P1" } });
+
+	gedcomx::Relationship couple;
+	couple.id = "R1";
+	couple.type = "http://gedcomx.org/Couple";
+	couple.person1Id = "P1";
+	couple.person2Id = "P2";
+	gedcomx::Fact marriage;
+	marriage.id = "F1";
+	marriage.type = "http://gedcomx.org/Marriage";
+	marriage.conclusion.sources.push_back({ "SD1" });
+	couple.facts.push_back(marriage);
+
+	gedcomx::Relationship child;
+	child.id = "R2";
+	child.type = "http://gedcomx.org/ParentChild";
+	child.person1Id = "P1";
+	child.person2Id = "P3";
+	db.saveAll({ couple, child }, "S1");
+
+	CHECK(db.deletePerson("S1:P1"));
+
+	CHECK_FALSE(db.loadPerson("S1:P1").has_value());
+	CHECK(db.loadPerson("S1:P2").has_value());  // partner survives
+	CHECK(db.loadPerson("S1:P3").has_value());  // child survives
+	CHECK(db.loadRelationshipsForPerson("S1:P2").empty());  // couple went with P1
+	CHECK(db.loadRelationshipsForPerson("S1:P3").empty());  // parent-child went too
+	CHECK(db.getLinkedPersonKeys("S2:P1").empty());  // link row removed
+}

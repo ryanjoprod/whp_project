@@ -421,6 +421,7 @@ void App::run() {
 		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
 		window_.setProjectOpen(currentProject_.has_value());
 		window_.renderCreationModals(knownSources_);
+		window_.renderDeleteConfirmModal();
 		window_.endFrame();
 
 		auto newProjectReq = window_.consumeNewProjectRequest();
@@ -606,6 +607,57 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to save relationship: ") + e.what());
+			}
+		}
+
+		if (auto del = window_.consumeDeleteRequest()) {
+			try {
+				bool deleted = false;
+
+				if (del->kind == Window::DeleteRequest::Kind::Person) {
+					// If the root is going away, pick a neighbor as the new root *before* erasing edges
+					std::string newRoot;
+					if (currentRootKey_ == del->key) {
+						for (const auto& [k, rel] : visibleRelationshipsMap_) {
+							if (rel.person1Id == del->key) {
+								newRoot = rel.person2Id;
+								break;
+							}
+							if (rel.person2Id == del->key) {
+								newRoot = rel.person1Id;
+								break;
+							}
+						}
+					}
+					deleted = db_->deletePerson(del->key);
+					visiblePeopleMap_.erase(del->key);
+					for (auto it = visibleRelationshipsMap_.begin(); it != visibleRelationshipsMap_.end(); ) {
+						if (it->second.person1Id == del->key || it->second.person2Id == del->key)
+							it = visibleRelationshipsMap_.erase(it);
+						else
+							++it;
+					}
+					if (currentRootKey_ == del->key) {
+						currentRootKey_ = newRoot;  // empty if the root had no neighbors
+						saveProject();
+					}
+				}
+				else {
+					deleted = db_->deleteRelationship(del->key);
+					visibleRelationshipsMap_.erase(del->key);
+				}
+
+				if (!deleted)
+					Logger::log(LogLevel::Warning, "Delete matched no rows: " + del->key);
+
+				aggregateViewDirty_ = true;
+				if (!currentRootKey_.empty())
+					loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+				else
+					rebuildVisibleVectors();
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to delete: ") + e.what());
 			}
 		}
 	

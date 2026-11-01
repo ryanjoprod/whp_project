@@ -41,10 +41,6 @@ namespace storage {
 			// Clear old names for this person before re-inseting (simple
 			// replace-all strategy; fine until incremental updates matter).
 			// The code below fixes leaving orphaned data
-			const std::string oldNames = "(SELECT id FROM names WHERE person_id = '" + key + "')";
-			const std::string oldForms = "(SELECT id FROM name_forms WHERE name_id IN " + oldNames + ")";
-			exec("DELETE FROM name_parts WHERE name_form_id IN " + oldForms + ";");
-			exec("DELETE FROM name_forms WHERE name_id IN " + oldNames + ";");
 			exec("DELETE FROM names WHERE person_id = '" + key + "';");
 
 			for (const auto& name : person.names) {
@@ -80,16 +76,13 @@ namespace storage {
 			}
 
 			// Cleans up orphaned data before saving
-			const std::string oldFacts = "(SELECT row_key FROM person_facts WHERE person_id = '" + key + "')";
-			exec("DELETE FROM person_fact_sources WHERE person_fact_id IN " + oldFacts + ";");
-			exec("DELETE FROM person_fact_notes WHERE person_fact_id IN " + oldFacts + ";");
 			exec("DELETE FROM person_facts WHERE person_id = '" + key + "';");
 
 			for (size_t i = 0; i < person.facts.size(); ++i) {
 				const auto& fact = person.facts[i];
 				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
 				std::string factKey = rowKey(key, localId);
-				upsert("INSERT OR REPLACE INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+				upsert("INSERT INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
 						bindText(s, 2, localId);
@@ -104,7 +97,6 @@ namespace storage {
 						bindText(s, 11, fact.conclusion.lang);
 					});
 
-				exec("DELETE FROM person_fact_sources WHERE person_fact_id = '" + factKey + "';");
 				for (const auto& src : fact.conclusion.sources) {
 					upsert("INSERT INTO person_fact_sources (person_fact_id, source_description_id) VALUES (?, ?);",
 						[&](sqlite3_stmt* s) {
@@ -244,6 +236,10 @@ namespace storage {
 			return result;
 		}
 
+		bool deletePerson(const std::string& personKey) {
+			return deleteByKey("DELETE FROM persons WHERE row_key = ?;", personKey);
+		}
+
 		void saveRelationshipRow(const gedcomx::Relationship& rel, const std::string& sourceId) {
 			std::string relKey = rowKey(sourceId, rel.id);
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
@@ -273,16 +269,13 @@ namespace storage {
 					});
 			}
 
-			const std::string oldFacts = "(SELECT row_key FROM relationship_facts WHERE relationship_id = '" + relKey + "')";
-			exec("DELETE FROM relationship_fact_sources WHERE relationship_fact_id IN " + oldFacts + ";");
-			exec("DELETE FROM relationship_fact_notes WHERE relationship_fact_id IN " + oldFacts + ";");
 			exec("DELETE FROM relationship_facts WHERE relationship_id = '" + relKey + "';");
 
 			for (size_t i = 0; i < rel.facts.size(); ++i) {
 				const auto& fact = rel.facts[i];
 				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
 				std::string factKey = rowKey(relKey, localId);
-				upsert("INSERT OR REPLACE INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+				upsert("INSERT INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
 						bindText(s, 2, localId);
@@ -297,7 +290,6 @@ namespace storage {
 						bindText(s, 11, fact.conclusion.lang);
 					});
 
-				exec("DELETE FROM relationship_fact_sources WHERE relationship_fact_id = '" + factKey + "';");
 				for (const auto& src : fact.conclusion.sources) {
 					upsert("INSERT INTO relationship_fact_sources (relationship_fact_id, source_description_id) VALUES (? ,?);",
 						[&](sqlite3_stmt* s) {
@@ -335,6 +327,10 @@ namespace storage {
 				saveRelationshipRow(rel, sourceId);
 			}
 			tx.commit();
+		}
+
+		bool deleteRelationship(const std::string& relationshipKey) {
+			return deleteByKey("DELETE FROM relationships WHERE row_key = ?;", relationshipKey);
 		}
 
 		void save(const gedcomx::SourceDescription& source) {
@@ -1000,6 +996,14 @@ namespace storage {
 			
 			return rel;
 		}
+
+		bool deleteByKey(const std::string& sql, const std::string& key) {
+			Transaction tx(*this);
+			upsert(sql, [&](sqlite3_stmt* s) { bindText(s, 1, key); });
+			const bool deleted = sqlite3_changes(db_) > 0;  // counts only the row you asked for, not cascades
+			tx.commit();
+			return deleted;
+		}
 	};
 
 	// --- Database: thin forward wrapper around Impl ---
@@ -1037,6 +1041,10 @@ namespace storage {
 		return impl_->getLinkedPersonKeys(personKey);
 	}
 
+	bool Database::deletePerson(const std::string& personKey) {
+		return impl_->deletePerson(personKey);
+	}
+
 	void Database::saveRelationshipRow(const gedcomx::Relationship& relationship, const std::string& sourceId) {
 		impl_->save(relationship, sourceId);
 	}
@@ -1051,6 +1059,10 @@ namespace storage {
 
 	void Database::saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId) {
 		impl_->saveAll(relationships, sourceId);
+	}
+
+	bool Database::deleteRelationship(const std::string& key) {
+		return impl_->deleteRelationship(key);
 	}
 	
 	void Database::save(const gedcomx::SourceDescription& source) {

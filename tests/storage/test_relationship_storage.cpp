@@ -292,3 +292,57 @@ TEST_CASE("saveAll rolls back the whole batch when one relationship is invalid")
 	CHECK_THROWS_AS(db.saveAll({ good, bad }, "S1"), std::runtime_error);
 	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());	// 'good' was rolled back, too
 }
+
+TEST_CASE("Deleting a relationship leaves both people") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	db.save(p1, "S1");
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = "P1";
+	rel.person2Id = "P2";
+	db.save(rel, "S1");
+
+	CHECK(db.deleteRelationship("S1:R1"));
+	CHECK(db.loadPerson("S1:P1").has_value());
+	CHECK(db.loadPerson("S1:P2").has_value());
+	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());
+	CHECK_FALSE(db.deleteRelationship("S1:R1"));  // already gone;
+	CHECK_FALSE(db.deletePerson("S1:NOBODY"));
+}
+
+TEST_CASE("Re-saving a person keeps their relationships") {
+	// Guards the upsert change: INSERT OR REPLACE would have cascaded and deleted these.
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	db.save(p1, "S1");
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = "P1";
+	rel.person2Id = "P2";
+	db.save(rel, "S1");
+
+	p1.gender = gedcomx::Gender{ "http://gedcomx.org/Male" };  // an "edit"
+	db.save(p1, "S1");
+
+	CHECK(db.loadRelationshipsForPerson("S1:P1").size() == 1);
+	CHECK(db.loadPerson("S1:P1")->gender.has_value());
+}

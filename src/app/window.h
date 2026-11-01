@@ -120,6 +120,16 @@ public:
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
 	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
 
+	// Delete
+	struct DeleteRequest {
+		enum class Kind { Person, Relationship } kind;
+		std::string key;  // row key, e.g. "S1:P1" or "S1:R1"
+		std::string label;  // show in the confirmation
+	};
+	void requestDelete(DeleteRequest::Kind kind, const std::string& key, const std::string& label);
+	void renderDeleteConfirmModal();
+	std::optional<DeleteRequest> consumeDeleteRequest();
+
 	// View mode
 	ViewMode viewMode() const { return viewMode_; }
 	std::string viewModeSourceId() const { return viewModeSourceId_; }
@@ -298,6 +308,11 @@ private:
 	void renderRelationshipEditorEventsTab();
 	void renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderRelationshipEditorAttributesTab();
+
+	// Delete
+	bool showDeleteConfirmModal_ = false;
+	std::optional<DeleteRequest> pendingDelete_;  // what the modal is asking about
+	std::optional<DeleteRequest> deleteResult_;  // set only when the user confirms
 
 	// Export Modal
 	bool showExportModal_ = false;

@@ -550,3 +550,61 @@ std::optional<std::string> Window::consumeLinkSearchQuery() {
 void Window::setLinkSearchResults(const std::vector<gedcomx::Person>& results) {
     linkSearchResults_ = results;
 }
+
+// --- Delete Functionality ---
+
+void Window::requestDelete(DeleteRequest::Kind kind, const std::string& key, const std::string& label) {
+    pendingDelete_ = DeleteRequest{ kind, key, label };
+    showDeleteConfirmModal_ = true;
+}
+
+void Window::renderDeleteConfirmModal() {
+    if (showDeleteConfirmModal_ && !ImGui::IsPopupOpen("Confirm Delete")) {
+        ImGui::OpenPopup("Confirm Delete");
+    }
+
+    if (ImGui::BeginPopupModal("Confirm Delete", &showDeleteConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (pendingDelete_) {
+            if (pendingDelete_->kind == DeleteRequest::Kind::Person) {
+                ImGui::Text("Delete %s?", pendingDelete_->label.c_str());
+                ImGui::Spacing();
+                ImGui::TextWrapped("This also removes every relationship this person is in, including any"
+                    "outside the current view. The people on the other end are kept.");
+            }
+            else {
+                ImGui::Text("Delete the relationship between %s?", pendingDelete_->label.c_str());
+                ImGui::Spacing();
+                ImGui::TextWrapped("Both people are kept.");
+            }
+            ImGui::Spacing();
+            ImGui::TextDisabled("This cannot be undone.");
+        }
+
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
+        if (ImGui::Button("Delete")) {
+            deleteResult_ = pendingDelete_;
+            pendingDelete_.reset();
+            showDeleteConfirmModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            pendingDelete_.reset();
+            showDeleteConfirmModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+std::optional<Window::DeleteRequest> Window::consumeDeleteRequest() {
+    auto result = deleteResult_;
+    deleteResult_.reset();
+    if (result && result->kind == DeleteRequest::Kind::Person && result->key == selectedPersonId_) {
+        selectedPersonId_.clear();  // close the Details panel for a person that no longer exists
+    }
+    return result;
+}

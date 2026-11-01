@@ -66,11 +66,13 @@ namespace storage {
 		std::optional<std::string> getAggregateIdForPerson(const std::string& personKey);
 		bool areSamePerson(const std::string& personKeyA, const std::string& personKeyB);
 		std::vector<std::string> getLinkedPersonKeys(const std::string& personKey);
+		bool deletePerson(const std::string& personKey);
 
 		void saveRelationshipRow(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey);
 		void save(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		void saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId);
+		bool deleteRelationship(const std::string& relationshipKey);
 
 		void save(const gedcomx::SourceDescription& source);
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions();
