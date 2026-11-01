@@ -646,7 +646,7 @@ namespace storage {
 
 			sqlite3_stmt* stmt = nullptr;
 			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
-				throw std::runtime_error("Faled to prepare search query: " + std::string(sqlite3_errmsg(db_)));
+				throw std::runtime_error("Failed to prepare search query: " + std::string(sqlite3_errmsg(db_)));
 
 			std::string pattern = "%" + query + "%";
 			int idx = 1;
@@ -900,12 +900,19 @@ namespace storage {
 			return text ? reinterpret_cast<const char*>(text) : "";
 		}
 
+		// First line of a statement, trimmed, so errors name the table without dumping a whole	schema
+		static std::string sqlSnippet(const std::string& sql) {
+			std::string s = sql.substr(0, sql.find('\n'));
+			if (s.size() > 120) s = s.substr(0, 120) + "...";
+			return s;
+		}
+
 		void exec(const std::string& sql) {
 			char* errMsg = nullptr;
 			if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
 				std::string error = errMsg ? errMsg : "unknown error";
 				sqlite3_free(errMsg);
-				throw std::runtime_error("SQL error: " + error);
+				throw std::runtime_error("SQL error: " + error + " | " + sqlSnippet(sql));
 			}
 		}
 
@@ -913,12 +920,12 @@ namespace storage {
 		void upsert(const std::string& sql, BindFn bind) {
 			sqlite3_stmt* stmt = nullptr;
 			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
-				throw std::runtime_error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+				throw std::runtime_error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)) + " | " + sqlSnippet(sql));
 			bind(stmt);
 			if (sqlite3_step(stmt) != SQLITE_DONE) {
 				std::string error = sqlite3_errmsg(db_);
 				sqlite3_finalize(stmt);
-				throw std::runtime_error("Failed to execute statement: " + error);
+				throw std::runtime_error("Failed to execute statement: " + error + " | " + sqlSnippet(sql));
 			}
 			sqlite3_finalize(stmt);
 		}
@@ -933,7 +940,7 @@ namespace storage {
 		void query(const std::string& sql, RowFn onRow) {
 			sqlite3_stmt* stmt = nullptr;
 			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
-				throw std::runtime_error("Failed to prepare query: " + std::string(sqlite3_errmsg(db_)));
+				throw std::runtime_error("Failed to prepare query: " + std::string(sqlite3_errmsg(db_)) + " | " + sqlSnippet(sql));
 			while (sqlite3_step(stmt) == SQLITE_ROW) onRow(stmt);
 			sqlite3_finalize(stmt);
 		}
