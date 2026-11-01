@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <functional>
 
 #include "gedcomx/person.h"
 #include "gedcomx/relationship.h"
@@ -91,6 +92,8 @@ namespace storage {
 
 		// Exports
 		SourceExport gatherSourceExport(const std::string& sourceId);
+
+		void runInTransaction(const std::function<void()>& work);
 
 	private:
 		class Impl;

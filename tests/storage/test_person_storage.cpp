@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <stdexcept>
+
 #include "test_helpers.h"
 #include "storage/database.h"
 #include "gedcomx/person.h"
@@ -183,4 +185,34 @@ TEST_CASE("Facts without ids are all kept") {
 	auto loaded = db.loadPerson("S1:P1");
 	REQUIRE(loaded.has_value());
 	CHECK(loaded->facts.size() == 2);
+}
+
+TEST_CASE("A failed save does not poison the connection") {
+	storage::Database db(":memory:");
+
+	gedcomx::Person p;
+	p.id = "P1";
+
+	CHECK_THROWS_AS(db.save(p, "NO_SUCH_SOURCE"), std::runtime_error);
+
+	testutil::saveSource(db, "S1");
+	CHECK_NOTHROW(db.save(p, "S1"));  // would fail with "transaction within a transaction" without the guard
+	CHECK(db.loadPerson("S1:P1").has_value());
+}
+
+TEST_CASE("runInTransaction rolls back everything when the work throws") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p;
+	p.id = "P1";
+
+	CHECK_THROWS(db.runInTransaction([&] {
+		db.save(p, "S1");  // nexted save inside the outer transaction
+		throw std::runtime_error("boom");
+	}));
+	CHECK_FALSE(db.loadPerson("S1:P1").has_value());
+
+	CHECK_NOTHROW(db.save(p, "S1"));  // connection still healthy
 }

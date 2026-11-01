@@ -12,6 +12,7 @@ namespace storage {
 			if (sqlite3_open(path.c_str(), &db_) != SQLITE_OK) {
 				throw std::runtime_error("Failed to open database: " + path);
 			}
+			exec("PRAGMA foreign_keys = ON;");
 			ensureSchemaVersion();
 		}
 
@@ -751,24 +752,32 @@ namespace storage {
 			return result;
 		}
 
+		void runInTransaction(const std::function<void()>& work) {
+			Transaction tx(*this);
+			work();  // any throw unwinds, so the guard rolls back
+			tx.commit();
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 
 		// Rolls back automatically if an exception skips commit()
 		struct Transaction {
-			explicit Transaction(Impl& impl) : impl_(impl) {
-				impl_.exec("BEGIN TRANSACTION;");
+			explicit Transaction(Impl& impl) : impl_(impl), name_("sp" + std::to_string(impl.savepointDepth_++)) {
+				impl_.exec("SAVEPOINT " + name_ + ";");
 			}
 			~Transaction() {
 				if (!committed_) {
 					try {
-						impl_.exec("ROLLBACK;");
+						impl_.exec("ROLLBACK TO " + name_ + ";");
+						impl_.exec("RELEASE " + name_ + ";");  // ROLLBACK TO alove leaves the savepoint open
 					}
 					catch (...) {}
 				}
+				--impl_.savepointDepth_;
 			}
 			void commit() {
-				impl_.exec("COMMIT;");
+				impl_.exec("RELEASE " + name_ + ";");
 				committed_ = true;
 			}
 
@@ -776,8 +785,10 @@ namespace storage {
 			Transaction& operator=(const Transaction&) = delete;
 		private:
 			Impl& impl_;
+			std::string name_;
 			bool committed_ = false;
 		};
+		int savepointDepth_ = 0;  // member of Impl, next to db_
 
 		static std::string rowKey(const std::string& sourceId, const std::string& localId) {
 			return sourceId + ":" + localId;
@@ -1089,5 +1100,9 @@ namespace storage {
 
 	std::optional<std::string> Database::getAggregateIdForPerson(const std::string& personKey) {
 		return impl_->getAggregateIdForPerson(personKey);
+	}
+
+	void Database::runInTransaction(const std::function<void()>& work) {
+		impl_->runInTransaction(work);
 	}
 };

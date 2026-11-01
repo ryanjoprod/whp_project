@@ -2,7 +2,7 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 2;
+	constexpr int kSchemaVersion = 3;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
@@ -18,7 +18,7 @@ namespace storage {
 			confidence TEXT,
 			lang TEXT,
 			gender TEXT,
-			FOREIGN KEY (source_id) REFERENCES sources(id)
+			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS person_notes (
@@ -27,7 +27,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		); 	 
 
 		CREATE TABLE IF NOT EXISTS person_facts (
@@ -42,15 +42,15 @@ namespace storage {
 			value TEXT,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+			FOREIGN KEY (person_id) REFERENCES persons(row_key)	ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_fact_sources (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			person_fact_id TEXT NOT NULL,
 			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key),
-			FOREIGN KEY (source_description_id) REFERENCES sources(id)
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS person_fact_notes (
@@ -59,20 +59,21 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key)
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_links (
 			aggregate_id TEXT NOT NULL,
 			person_id TEXT NOT NULL,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)
+			FOREIGN KEY (person_id) REFERENCES persons(row_key)	ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_attributes (
 			row_key TEXT PRIMARY KEY,
 			person_id TEXT NOT NULL,
 			type TEXT,
-			value TEXT
+			value TEXT,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_addresses (
@@ -82,7 +83,8 @@ namespace storage {
 			city TEXT,
 			state_or_province TEXT,
 			country TEXT,
-			postal_code TEXT
+			postal_code TEXT,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS names (
@@ -91,14 +93,14 @@ namespace storage {
 			title TEXT,
 			nick_name TEXT,
 			call_name TEXT,
-			FOREIGN KEY (person_id) REFERENCES persons(id)
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS name_forms (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name_id INTEGER NOT NULL,
 			full_text TEXT,
-			FOREIGN KEY (name_id) REFERENCES names(id)
+			FOREIGN KEY (name_id) REFERENCES names(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS name_parts (
@@ -106,7 +108,7 @@ namespace storage {
 			name_form_id INTEGER NOT NULL,
 			value TEXT NOT NULL,
 			type TEXT,
-			FOREIGN KEY (name_form_id) REFERENCES name_forms(id)
+			FOREIGN KEY (name_form_id) REFERENCES name_forms(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS relationships (
@@ -118,8 +120,9 @@ namespace storage {
 			person2_id TEXT NOT NULL,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (person1_id) REFERENCES persons(id),
-			FOREIGN KEY (person2_id) REFERENCES persons(id)
+			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT,
+			FOREIGN KEY (person1_id) REFERENCES persons(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (person2_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		); 
 
 		CREATE TABLE IF NOT EXISTS relationship_notes (
@@ -128,7 +131,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)	ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_facts (
@@ -143,15 +146,15 @@ namespace storage {
 			value TEXT,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)	ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_sources (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			relationship_id TEXT NOT NULL,
 			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key),
-			FOREIGN KEY (source_description_id) REFERENCES sources(id)
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_fact_notes (
@@ -160,15 +163,15 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key)
+			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS relationship_fact_sources (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			relationship_fact_id TEXT NOT NULL,
 			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key),
-			FOREIGN KEY (source_description_id) REFERENCES sources(id)
+			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS agents (
@@ -180,21 +183,21 @@ namespace storage {
 			agent_id TEXT NOT NULL,
 			lang TEXT,
 			value TEXT,
-			FOREIGN KEY (agent_id) REFERENCES agents(id)
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS agent_emails (
-			id INTEGER PRIMARY KEy AUTOINCREMENT,
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			agent_id TEXT NOT NULL,
 			email TEXT,
-			FOREIGN KEY (agent_id) REFERENCES agents(id)
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS agent_phones (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			agent_id TEXT NOT NULL,
 			phone TEXT,
-			FOREIGN KEY (agent_id) REFERENCES agents(id)
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS agent_addresses (
@@ -205,7 +208,7 @@ namespace storage {
 			state_or_province TEXT,
 			postal_code TEXT,
 			country TEXT,
-			FOREIGN KEY (agent_id) REFERENCES agents(id)
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS events (
@@ -227,7 +230,7 @@ namespace storage {
 			details TEXT,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (event_id) REFERENCES events(row_key)
+			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS event_notes (
@@ -236,7 +239,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (event_id) REFERENCES events(row_key)
+			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS event_role_notes (
@@ -245,7 +248,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (event_role_id) REFERENCES event_roles(id)
+			FOREIGN KEY (event_role_id) REFERENCES event_roles(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS documents (
@@ -264,7 +267,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (document_id) REFERENCES documents(id)
+			FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS places (
@@ -274,8 +277,7 @@ namespace storage {
 			longitude TEXT,
 			jurisdiction_id TEXT,
 			confidence TEXT,
-			lang TEXT,
-			FOREIGN KEY (jurisdiction_id) REFERENCES places(id)
+			lang TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS place_names (
@@ -283,7 +285,7 @@ namespace storage {
 			place_id TEXT NOT NULL,
 			lang TEXT,
 			value TEXT,
-			FOREIGN KEY (place_id) REFERENCES places(id)
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS place_notes (
@@ -292,7 +294,7 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (place_id) REFERENCES places(id)
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
 		);
 	)";
 }

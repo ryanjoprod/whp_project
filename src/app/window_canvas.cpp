@@ -297,11 +297,15 @@ void Window::renderCanvas(
             auto p1 = findPerson(contextRelationship_->person1Id);
             auto p2 = findPerson(contextRelationship_->person2Id);
             bool both = p1 != people.end() && p2 != people.end();
-            ImGui::BeginDisabled(!both);
-            if (ImGui::MenuItem("Edit Relationship...") && both) {
+            const bool aggregate = (viewMode_ == ViewMode::Aggregate);
+            ImGui::BeginDisabled(!both || aggregate);
+            if (ImGui::MenuItem("Edit Relationship...") && both && !aggregate) {
                 requestEditRelationshipEditor(*contextRelationship_, *p1, *p2);
             }
             ImGui::EndDisabled();
+            if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Switch to All Sources or a single source to edit");
+            }
         }
         ImGui::EndPopup();
     }
@@ -385,11 +389,15 @@ void Window::renderDetailsPanel(
             for (const auto& f : rel.facts) {
                 ImGui::BulletText("  %s: %s %s", gedcomx::formatTypeUri(f.type).c_str(), f.date.original.c_str(), f.place.original.c_str());
             }
-            ImGui::BeginDisabled(pit == people.end());
-            if (ImGui::SmallButton("Edit...") && pit != people.end()) {
+            const bool aggregate = (viewMode_ == ViewMode::Aggregate);
+            ImGui::BeginDisabled(pit == people.end() || aggregate);
+            if (ImGui::SmallButton("Edit...") && pit != people.end() && !aggregate) {
                 requestEditRelationshipEditor(rel, isP1 ? person : *pit, isP1 ? *pit : person);
             }
             ImGui::EndDisabled();
+            if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Switch to All Sources or a single source to edit");
+            }
             ImGui::PopID();
         }
 

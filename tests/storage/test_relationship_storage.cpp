@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <stdexcept>
+
 #include "test_helpers.h"
 #include "storage/database.h"
 #include "gedcomx/relationship.h"
@@ -261,4 +263,32 @@ TEST_CASE("Resaving a relationship replaces its citations") {
 	REQUIRE(after.size() == 1);
 	REQUIRE(after[0].conclusion.sources.size() == 1);
 	CHECK(after[0].conclusion.sources[0].sourceDescriptionId == "SD1");
+}
+
+TEST_CASE("saveAll rolls back the whole batch when one relationship is invalid") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p1, "S1");
+	db.save(p2, "S1");
+
+	gedcomx::Relationship good;
+	good.id = "R1";
+	good.type = "http://gedcomx.org/Couple";
+	good.person1Id = "P1";
+	good.person2Id = "P2";
+
+	gedcomx::Relationship bad;
+	bad.id = "R2";
+	bad.type = "http://gedcomx.org/Couple";
+	bad.person1Id = "P1";
+	bad.person2Id = "P99";  // no such person
+
+	CHECK_THROWS_AS(db.saveAll({ good, bad }, "S1"), std::runtime_error);
+	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());	// 'good' was rolled back, too
 }

@@ -210,15 +210,26 @@ std::string App::loadSourceFile(const std::string& filePath) {
 	auto documents = gedcomx::parseDocuments(document);
 	auto places = gedcomx::parsePlaceDescriptions(document);
 
-	const std::string sourceId = sourceDescriptions.empty() ? "" : sourceDescriptions[0].id;
+	if (sourceDescriptions.empty()) {
+		Logger::log(LogLevel::Error, "Import rejected: file has no SourceDescription: " + pathToLoad);
+		return "";
+	}
+	const std::string sourceId = sourceDescriptions[0].id;
 
-	for (const auto& p : places) db_->save(p);
-	for (const auto& s : sourceDescriptions) db_->save(s);
-	for (const auto& p : people) db_->save(p, sourceId);
-	for (const auto& r : relationships) db_->save(r, sourceId);
-	for (const auto& a : agents) db_->save(a);
-	for (const auto& e : events) db_->save(e);
-	for (const auto& d : documents) db_->save(d);
+	try {
+		db_->runInTransaction([&] {
+			for (const auto& p : places) db_->save(p);
+			for (const auto& s : sourceDescriptions) db_->save(s);
+			for (const auto& p : people) db_->save(p, sourceId);
+			for (const auto& r : relationships) db_->save(r, sourceId);
+			for (const auto& a : agents) db_->save(a);
+			for (const auto& e : events) db_->save(e);
+			for (const auto& d : documents) db_->save(d);
+		});
+	}
+	catch (const std::exception& e) {
+		Logger::log(LogLevel::Error, std::string("Import failed, nothing was saved: ") + e.what());
+	}
 
 	// temporary test print code goes here
 
@@ -587,6 +598,9 @@ void App::run() {
 
 		if (auto edited = window_.consumeRelationshipEditResult()) {
 			try {
+				if (edited->second.empty()) {
+					Logger::log(LogLevel::Error, "Cannot save relationship: no source");
+				}
 				db_->save(edited->first, edited->second);
 				if (!currentRootKey_.empty()) loadNeighborhood(currentRootKey_, neighborhoodDepth_);
 			}
