@@ -261,3 +261,42 @@ TEST_CASE("Deleting a person removes their relationships and links, not their pa
 	CHECK(db.loadRelationshipsForPerson("S1:P3").empty());  // parent-child went too
 	CHECK(db.getLinkedPersonKeys("S2:P1").empty());  // link row removed
 }
+
+TEST_CASE("Apostrophes in ids and names do not break storage") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S'1");
+
+	gedcomx::Person p1;
+	p1.id = "P'1";
+	gedcomx::Name name;
+	gedcomx::NameForm form;
+	form.fullText = "Jo D'Angelo";
+	name.nameForms.push_back(form);
+	p1.names.push_back(name);
+	gedcomx::Fact fact;
+	fact.id = "F'1";
+	fact.type = "http://gedcomx.org/Birth";
+	p1.facts.push_back(fact);
+
+	gedcomx::Person p2;
+	p2.id = "P'2";
+
+	CHECK_NOTHROW(db.save(p1, "S'1"));
+	CHECK_NOTHROW(db.save(p1, "S'1"));  // second save exercises the DELETE-then-reinsert paths
+	CHECK_NOTHROW(db.save(p2, "S'1"));
+
+	gedcomx::Relationship rel;
+	rel.id = "R'1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = p1.id;
+	rel.person2Id = p2.id;
+	CHECK_NOTHROW(db.save(rel, "S'1"));
+	CHECK_NOTHROW(db.save(rel, "S'1"));
+
+	auto loaded = db.loadPerson("S'1:P'1");
+	REQUIRE(loaded.has_value());
+	CHECK(loaded->primaryFullText() == "Jo D'Angelo");
+	CHECK(db.loadRelationshipsForPerson("S'1:P'1").size() == 1);
+	CHECK(db.deletePerson("S'1:P'1"));
+}

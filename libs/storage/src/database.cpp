@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <stdexcept>
 #include <map>
+#include <memory>
 
 namespace storage {
 	class Database::Impl {
@@ -41,7 +42,7 @@ namespace storage {
 			// Clear old names for this person before re-inseting (simple
 			// replace-all strategy; fine until incremental updates matter).
 			// The code below fixes leaving orphaned data
-			exec("DELETE FROM names WHERE person_id = '" + key + "';");
+			exec("DELETE FROM names WHERE person_id = ?;", { key });
 
 			for (const auto& name : person.names) {
 				long long nameId = insertReturningId(
@@ -76,7 +77,7 @@ namespace storage {
 			}
 
 			// Cleans up orphaned data before saving
-			exec("DELETE FROM person_facts WHERE person_id = '" + key + "';");
+			exec("DELETE FROM person_facts WHERE person_id = ?;", { key });
 
 			for (size_t i = 0; i < person.facts.size(); ++i) {
 				const auto& fact = person.facts[i];
@@ -120,7 +121,7 @@ namespace storage {
 
 			// One query per person is simple to reason about; a single join
 			// would be faster but harder to read at this stage of the project.
-			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons;",
+			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons;", {},
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string localId = columnText(s, 1);
@@ -163,7 +164,7 @@ namespace storage {
 			// Gather the distinct aggregate ids first.
 			std::vector<std::string> aggregateIds;
 
-			query("SELECT DISTINCT aggregate_id FROM person_links;",
+			query("SELECT DISTINCT aggregate_id FROM person_links;", {},
 				[&](sqlite3_stmt* s) {
 					aggregateIds.push_back(columnText(s, 0));
 				});
@@ -175,7 +176,7 @@ namespace storage {
 
 				// Merge names/facts from every linked person into one combined record.
 				// Naive concatenation for now - no deduplication of near-identical names.
-				query("SELECT person_id FROM person_links WHERE aggregate_id = '" + aggId + "';",
+				query("SELECT person_id FROM person_links WHERE aggregate_id = ?;", { aggId },
 					[&](sqlite3_stmt* s) {
 						std::string personKey = columnText(s, 0);
 						auto names = loadNamesFor(personKey);
@@ -192,7 +193,7 @@ namespace storage {
 
 		std::optional<std::string> getAggregateIdForPerson(const std::string& personKey) {
 			std::optional<std::string> result;
-			query("SELECT aggregate_id FROM person_links WHERE person_id = '" + personKey + "';",
+			query("SELECT aggregate_id FROM person_links WHERE person_id = ?;", { personKey },
 				[&](sqlite3_stmt* s) {
 					result = columnText(s, 0);
 				});
@@ -203,7 +204,7 @@ namespace storage {
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
 			std::optional<gedcomx::Person> result;
 
-			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons WHERE row_key = '" + personKey + "';",
+			query("SELECT row_key, local_id, source_id, confidence, lang, gender FROM persons WHERE row_key = ?;", { personKey },
 				[&](sqlite3_stmt* s) {
 					std::string key = columnText(s, 0);
 					std::string local_id = columnText(s, 1);
@@ -230,7 +231,7 @@ namespace storage {
 		std::vector<std::string> getLinkedPersonKeys(const std::string& personKey) {
 			std::vector<std::string> result;
 
-			query("SELECT DISTINCT pl2.person_id FROM person_links pl1 JOIN person_links pl2 ON pl1.aggregate_id = pl2.aggregate_id WHERE pl1.person_id = '" + personKey + "' AND pl2.person_id != '" + personKey + "';",
+			query("SELECT DISTINCT pl2.person_id FROM person_links pl1 JOIN person_links pl2 ON pl1.aggregate_id = pl2.aggregate_id WHERE pl1.person_id = ? AND pl2.person_id != ?;", { personKey, personKey },
 				[&](sqlite3_stmt* s) { result.push_back(columnText(s, 0)); });
 
 			return result;
@@ -260,7 +261,7 @@ namespace storage {
 					bindText(s, 8, rel.conclusion.lang);
 				});
 
-			exec("DELETE FROM relationship_sources WHERE relationship_id = '" + relKey + "';");
+			exec("DELETE FROM relationship_sources WHERE relationship_id = ?;", { relKey });
 			for (const auto& relSrc : rel.conclusion.sources) {
 				upsert("INSERT INTO relationship_sources (relationship_id, source_description_id) VALUES (?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -269,7 +270,7 @@ namespace storage {
 					});
 			}
 
-			exec("DELETE FROM relationship_facts WHERE relationship_id = '" + relKey + "';");
+			exec("DELETE FROM relationship_facts WHERE relationship_id = ?;", { relKey });
 
 			for (size_t i = 0; i < rel.facts.size(); ++i) {
 				const auto& fact = rel.facts[i];
@@ -307,7 +308,7 @@ namespace storage {
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey) {
 			std::vector<gedcomx::Relationship> rels;
 
-			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM relationships WHERE person1_id ='" + personKey + "' OR person2_id = '" + personKey + "' ORDER BY row_key;",
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM relationships WHERE person1_id = ? OR person2_id = ? ORDER BY row_key;", { personKey, personKey },
 				[&](sqlite3_stmt* s) {
 					rels.push_back(loadRelationshipRow(s));
 				});
@@ -347,7 +348,7 @@ namespace storage {
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions() {
 			std::vector<gedcomx::SourceDescription> results;
 
-			query("SELECT id, title, citation FROM sources;",
+			query("SELECT id, title, citation FROM sources;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::SourceDescription src;
 					src.id = columnText(s, 0);
@@ -365,7 +366,7 @@ namespace storage {
 					bindText(s, 1, agent.id);
 				});
 
-			exec("DELETE FROM agent_names WHERE agent_id = '" + agent.id + "';");
+			exec("DELETE FROM agent_names WHERE agent_id = ?;", { agent.id });
 			for (const auto& name : agent.names) {
 				upsert("INSERT INTO agent_names (agent_id, lang, value) VALUES (?, ?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -375,7 +376,7 @@ namespace storage {
 					});
 			}
 
-			exec("DELETE FROM agent_emails WHERE agent_id = '" + agent.id + "';");
+			exec("DELETE FROM agent_emails WHERE agent_id = ?;", { agent.id });
 			for (const auto& email : agent.emails) {
 				upsert("INSERT INTO agent_emails (agent_id, email) VALUES (?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -384,7 +385,7 @@ namespace storage {
 					});
 			}
 
-			exec("DELETE FROM agent_phones WHERE agent_id = '" + agent.id + "';");
+			exec("DELETE FROM agent_phones WHERE agent_id = ?;", { agent.id });
 			for (const auto& phone : agent.phones) {
 				upsert("INSERT INTO agent_phones (agent_id, phone) VALUES (?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -393,7 +394,7 @@ namespace storage {
 					});
 			}		   
 
-			exec("DELETE FROM agent_addresses WHERE agent_id = '" + agent.id + "';");
+			exec("DELETE FROM agent_addresses WHERE agent_id = ?;", { agent.id });
 			for (const auto& addr : agent.addresses) {
 				upsert("INSERT INTO agent_addresses (agent_id, street, city, state_or_province, postal_code, country) VALUES (?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -410,27 +411,27 @@ namespace storage {
 		std::vector<gedcomx::Agent> loadAllAgents() {
 			std::vector<gedcomx::Agent> results;
 
-			query("SELECT id FROM agents;",
+			query("SELECT id FROM agents;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::Agent agent;
 					agent.id = columnText(s, 0);
 
-					query("SELECT lang, value FROM agent_names WHERE agent_id = '" + agent.id + "';",
+					query("SELECT lang, value FROM agent_names WHERE agent_id = ?;", { agent.id },
 						[&](sqlite3_stmt* ns) {
 							agent.names.push_back({ columnText(ns, 0), columnText(ns ,1) });
 						});
 
-					query("SELECT email FROM agent_emails WHERE agent_id = '" + agent.id + "';",
+					query("SELECT email FROM agent_emails WHERE agent_id = ?;", { agent.id },
 						[&](sqlite3_stmt* es) {
 							agent.emails.push_back(columnText(es, 0));
 						});
 
-					query("SELECT phone FROM agent_phones WHERE agent_id = '" + agent.id + "';",
+					query("SELECT phone FROM agent_phones WHERE agent_id = ?;", { agent.id },
 						[&](sqlite3_stmt* ps) {
 							agent.phones.push_back(columnText(ps, 0));
 						});
 
-					query("SELECT street, city, state_or_province, postal_code, country FROM agent_addresses WHERE agent_id = '" + agent.id + "';",
+					query("SELECT street, city, state_or_province, postal_code, country FROM agent_addresses WHERE agent_id = ?;", { agent.id },
 						[&](sqlite3_stmt* as) {
 							gedcomx::Address addr;
 							addr.street = columnText(as, 0);
@@ -465,7 +466,7 @@ namespace storage {
 					bindText(s, 8, event.conclusion.lang);
 				});
 
-			exec("DELETE FROM event_roles WHERE event_id = '" + event.id + "';");
+			exec("DELETE FROM event_roles WHERE event_id = ?;", { event.id });
 			for (const auto& role : event.roles) {
 				long long roleRowId = insertReturningId(
 					"INSERT INTO event_roles (event_id, type, person_id, details, confidence, lang) VALUES (?, ?, ?, ?, ?, ?);",
@@ -495,7 +496,7 @@ namespace storage {
 		std::vector<gedcomx::Event> loadAllEvents() {
 			std::vector<gedcomx::Event> results;
 
-			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, confidence, lang FROM events;",
+			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, confidence, lang FROM events;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::Event event;
 					event.id = columnText(s, 1);
@@ -507,7 +508,7 @@ namespace storage {
 					event.conclusion.lang = columnText(s, 7);
 					event.conclusion.notes = loadNotesFor("event_notes", "event_id", event.id);
 
-					query("SELECT id, type, person_id, details, confidence, lang FROM event_roles WHERE event_id = '" + event.id + "';",
+					query("SELECT id, type, person_id, details, confidence, lang FROM event_roles WHERE event_id = ?;", { event.id },
 						[&](sqlite3_stmt* rs) {
 							gedcomx::EventRole role;
 							long long roleRowId = sqlite3_column_int64(rs, 0);
@@ -547,7 +548,7 @@ namespace storage {
 		std::vector<gedcomx::Document> loadAllDocuments() {
 			std::vector<gedcomx::Document> results;
 
-			query("SELECT id, type, text_type, extracted, text, confidence, lang FROM documents;",
+			query("SELECT id, type, text_type, extracted, text, confidence, lang FROM documents;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::Document doc;
 
@@ -583,7 +584,7 @@ namespace storage {
 					bindText(s, 7, place.conclusion.lang);
 				});
 
-			exec("DELETE FROM place_names WHERE place_id = '" + place.id + "';");
+			exec("DELETE FROM place_names WHERE place_id = ?;", { place.id });
 			for (const auto& name : place.names) {
 				upsert("INSERT INTO place_names (place_id, lang, value) VALUES (?, ?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -599,7 +600,7 @@ namespace storage {
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces() {
 			std::vector<gedcomx::PlaceDescription> results;
 
-			query("SELECT id, type, latitude, longitude, jurisdiction_id, confidence, lang FROM places;",
+			query("SELECT id, type, latitude, longitude, jurisdiction_id, confidence, lang FROM places;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::PlaceDescription place;
 
@@ -614,7 +615,7 @@ namespace storage {
 					place.conclusion.lang = columnText(s, 6);
 					place.conclusion.notes = loadNotesFor("place_notes", "place_id", place.id);
 
-					query("SELECT lang, value FROM place_names WHERE place_id = '" + place.id + "';",
+					query("SELECT lang, value FROM place_names WHERE place_id = ?;", { place.id },
 						[&](sqlite3_stmt* ns) {
 							place.names.push_back({ columnText(ns, 0), columnText(ns, 1) });
 						});
@@ -666,7 +667,7 @@ namespace storage {
 		SourceExport gatherSourceExport(const std::string& sourceId) {
 			SourceExport result;
 
-			query("SELECT row_key FROM persons WHERE source_id = '" + sourceId + "';",
+			query("SELECT row_key FROM persons WHERE source_id = ?;", { sourceId },
 				[&](sqlite3_stmt* s) {
 					auto person = loadPerson(columnText(s, 0));
 					if (person) {
@@ -675,7 +676,7 @@ namespace storage {
 					}
 			});
 
-			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM  relationships WHERE source_id = '" + sourceId + "';",
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang FROM  relationships WHERE source_id = ?;", { sourceId },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Relationship rel = loadRelationshipRow(s);
 					rel.person1Id = stripRowKeyPrefix(rel.person1Id, sourceId);
@@ -687,7 +688,7 @@ namespace storage {
 		}
 
 		void saveAttributesFor(const std::string& ownerKey, const std::vector<gedcomx::Attribute>& attrs) {
-			exec("DELETE FROM person_attributes WHERE person_id = '" + ownerKey + "';");
+			exec("DELETE FROM person_attributes WHERE person_id = ?;", { ownerKey });
 			for (const auto& a : attrs) {
 				std::string attrKey = rowKey(ownerKey, a.id);
 				upsert("INSERT INTO person_attributes (row_key, person_id, type, value) VALUES (?, ?, ?, ?);",
@@ -702,7 +703,7 @@ namespace storage {
 
 		std::vector<gedcomx::Attribute> loadAttributesFor(const std::string& ownerKey) {
 			std::vector<gedcomx::Attribute> result;
-			query("SELECT row_key, type, value FROM person_attributes WHERE person_id = '" + ownerKey + "';",
+			query("SELECT row_key, type, value FROM person_attributes WHERE person_id = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Attribute a;
 					a.id = stripSourcePrefix(columnText(s, 0), ownerKey);
@@ -715,7 +716,7 @@ namespace storage {
 		}
 
 		void saveAddressesFor(const std::string& ownerKey, const std::vector<gedcomx::Address>& addrs) {
-			exec("DELETE FROM person_addresses WHERE person_id = '" + ownerKey + "';");
+			exec("DELETE FROM person_addresses WHERE person_id = ?;", { ownerKey });
 			for (const auto& addr : addrs) {
 				std::string addrKey = rowKey(ownerKey, addr.id);
 				upsert("INSERT INTO person_addresses (row_key, person_id, street, city, state_or_province, postal_code, country) VALUES (?, ?, ?, ?, ?, ?, ?);",
@@ -733,7 +734,7 @@ namespace storage {
 
 		std::vector<gedcomx::Address> loadAddressesFor(const std::string& ownerKey) {
 			std::vector<gedcomx::Address> result;
-			query("SELECT row_key, street, city, state_or_province, postal_code, country FROM person_addresses WHERE person_id = '" + ownerKey + "';",
+			query("SELECT row_key, street, city, state_or_province, postal_code, country FROM person_addresses WHERE person_id = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Address addr;
 					addr.id = stripRowKeyPrefix(columnText(s, 0), ownerKey);
@@ -797,10 +798,10 @@ namespace storage {
 		void ensureSchemaVersion() {
 			int version = 0, tableCount = 0;
 
-			query("PRAGMA user_version;", [&](sqlite3_stmt* s) {
+			query("PRAGMA user_version;", {}, [&](sqlite3_stmt* s) {
 				version = sqlite3_column_int(s, 0);
 			});
-			query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+			query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';", {},
 				[&](sqlite3_stmt* s) {
 					tableCount = sqlite3_column_int(s, 0);
 			});
@@ -819,7 +820,7 @@ namespace storage {
 		std::vector<gedcomx::Name> loadNamesFor(const std::string& personId) {
 			std::vector<gedcomx::Name> names;
 
-			query("SELECT id, title, nick_name, call_name FROM names WHERE person_id = '" + personId + "';",
+			query("SELECT id, title, nick_name, call_name FROM names WHERE person_id = ?;", { personId },
 				[&](sqlite3_stmt* s) {
 					long long nameId = sqlite3_column_int64(s, 0);
 					gedcomx::Name name;
@@ -827,13 +828,13 @@ namespace storage {
 					name.nickName = columnText(s, 2);
 					name.callName = columnText(s, 3);
 
-					query("SELECT id, full_text FROM name_forms WHERE name_id = " + std::to_string(nameId) + ";",
+					query("SELECT id, full_text FROM name_forms WHERE name_id = " + std::to_string(nameId) + ";", {},
 						[&](sqlite3_stmt* fs) {
 							long long formId = sqlite3_column_int64(fs, 0);
 							gedcomx::NameForm form;
 							form.fullText = columnText(fs, 1);
 
-							query("SELECT value, type FROM name_parts WHERE name_form_id = " + std::to_string(formId) + ";",
+							query("SELECT value, type FROM name_parts WHERE name_form_id = " + std::to_string(formId) + ";", {},
 								[&](sqlite3_stmt* ps) {
 									form.parts.push_back({ columnText(ps, 0), columnText(ps, 1) });
 								});
@@ -856,7 +857,7 @@ namespace storage {
 
 		std::vector<gedcomx::Fact> loadFacts(const std::string& table, const std::string& notesTable, const std::string& sourcesTable, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::Fact> facts;
-			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';",
+			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Fact fact;
 					std::string factKey = columnText(s, 0);
@@ -874,7 +875,7 @@ namespace storage {
 					fact.conclusion.notes = loadNotesFor(notesTable, notesFk, factKey);
 
 					std::string sourcesFk = (sourcesTable == "person_fact_sources") ? "person_fact_id" : "relationship_fact_id";
-					query("SELECT source_description_id FROM " + sourcesTable + " WHERE " + sourcesFk + " = '" + factKey + "';",
+					query("SELECT source_description_id FROM " + sourcesTable + " WHERE " + sourcesFk + " = ?;", { factKey },
 						[&](sqlite3_stmt* ss) {
 							fact.conclusion.sources.push_back({ columnText(ss, 0) });
 						});
@@ -912,6 +913,18 @@ namespace storage {
 			}
 		}
 
+		static void bindAll(sqlite3_stmt* s, const std::vector<std::string>& params) {
+			for (size_t i = 0; i < params.size(); ++i) {
+				bindText(s, static_cast<int>(i) + 1, params[i]);
+			}
+		}
+
+		void exec(const std::string& sql, const std::vector<std::string>& params) {
+			upsert(sql, [&](sqlite3_stmt* s) {
+				bindAll(s, params);
+			});
+		}
+
 		template <typename BindFn>
 		void upsert(const std::string& sql, BindFn bind) {
 			sqlite3_stmt* stmt = nullptr;
@@ -932,6 +945,7 @@ namespace storage {
 			return sqlite3_last_insert_rowid(db_);
 		}
 
+		/*
 		template <typename RowFn>
 		void query(const std::string& sql, RowFn onRow) {
 			sqlite3_stmt* stmt = nullptr;
@@ -940,10 +954,21 @@ namespace storage {
 			while (sqlite3_step(stmt) == SQLITE_ROW) onRow(stmt);
 			sqlite3_finalize(stmt);
 		}
+		*/
+
+		template <typename RowFn>
+		void query(const std::string& sql, const std::vector<std::string>& params, RowFn onRow) {
+			sqlite3_stmt* raw = nullptr;
+			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &raw, nullptr) != SQLITE_OK)
+				throw std::runtime_error("Failed to prepare query: " + std::string(sqlite3_errmsg(db_)) + " | " + sqlSnippet(sql));
+			std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt(raw, sqlite3_finalize);
+			bindAll(stmt.get(), params);
+			while (sqlite3_step(stmt.get()) == SQLITE_ROW) onRow(stmt.get());
+		}
 	
 		// --- generic notes helpers, reused by all four owner types ---
 		void saveNotesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey, const std::vector<gedcomx::Note>& notes) {
-			exec("DELETE FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';");
+			exec("DELETE FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey });
 			for (const auto& note : notes) {
 				upsert("INSERT INTO " + table + " (" + fkColumn + ", lang, subject, text) VALUES (?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
@@ -957,7 +982,7 @@ namespace storage {
 
 		std::vector<gedcomx::Note> loadNotesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::Note> notes;
-			query("SELECT lang, subject, text FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';",
+			query("SELECT lang, subject, text FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Note note;
 					note.lang = columnText(s, 0);
@@ -971,7 +996,7 @@ namespace storage {
 
 		std::vector <gedcomx::SourceReference>loadSourcesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::SourceReference> sources;
-			query("SELECT source_description_id FROM " + table + " WHERE " + fkColumn + " = '" + ownerKey + "';",
+			query("SELECT source_description_id FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					sources.push_back({ columnText(s, 0) });
 				});
