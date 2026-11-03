@@ -2,7 +2,7 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 3;
+	constexpr int kSchemaVersion = 4;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
@@ -277,7 +277,8 @@ namespace storage {
 			longitude TEXT,
 			jurisdiction_id TEXT,
 			confidence TEXT,
-			lang TEXT
+			lang TEXT,
+			FOREIGN KEY (jurisdiction_id) REFERENCES places(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED
 		);
 
 		CREATE TABLE IF NOT EXISTS place_names (

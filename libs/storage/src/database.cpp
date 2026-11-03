@@ -568,6 +568,8 @@ namespace storage {
 		}
 	
 		void save(const gedcomx::PlaceDescription& place) {
+			Transaction tx(*this);
+
 			upsert("INSERT INTO places (id, type, latitude, longitude, jurisdiction_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
 				"ON CONFLICT(id) "
 				"DO UPDATE SET type = excluded.type, latitude = excluded.latitude, longitude = excluded.longitude, "
@@ -579,7 +581,8 @@ namespace storage {
 					else sqlite3_bind_null(s, 3);
 					if (place.longitude) sqlite3_bind_double(s, 4, *place.longitude);
 					else sqlite3_bind_null(s, 4);
-					bindText(s, 5, place.jurisdictionId);
+					if (place.jurisdictionId.empty()) sqlite3_bind_null(s, 5);
+					else bindText(s, 5, place.jurisdictionId);
 					bindText(s, 6, place.conclusion.confidence);
 					bindText(s, 7, place.conclusion.lang);
 				});
@@ -595,6 +598,8 @@ namespace storage {
 			}
 
 			saveNotesFor("place_notes", "place_id", place.id, place.conclusion.notes);
+
+			tx.commit();
 		 }
 
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces() {
