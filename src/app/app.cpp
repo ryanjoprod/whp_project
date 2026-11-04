@@ -568,7 +568,7 @@ void App::run() {
 			}
 		}
 
-		for (int p = 0; p < 2; ++p) {
+		for (int p = 0; p < 3; ++p) {
 			if (auto searchReq = window_.consumePersonSearchQuery(p)) {
 				try {
 					const std::string& query = searchReq->first;
@@ -734,6 +734,31 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to link persons: ") + e.what());
+			}
+		}
+
+		if (auto req = window_.consumeChildLoadRequest()) {
+			try {
+				std::vector<Window::ExistingChild> children;
+				std::unordered_map<std::string, size_t> indexByChild;
+				const std::string parents[2] = { req->first, req->second };
+
+				for (int slot = 0; slot < 2; ++slot) {
+					for (auto& link : db_->loadChildLinks(parents[slot])) {
+						auto it = indexByChild.find(link.person2Id);
+						if (it == indexByChild.end()) {
+							auto child = db_->loadPerson(link.person2Id);
+							if (!child) continue;
+							it = indexByChild.emplace(link.person2Id, children.size()).first;
+							children.push_back({ *child,{} });
+						}
+						children[it->second].link[slot] = std::move(link);
+					}
+				}
+				window_.setExistingChildren(children);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load children: ") + e.what());
 			}
 		}
 	}

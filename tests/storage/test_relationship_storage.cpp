@@ -346,3 +346,56 @@ TEST_CASE("Re-saving a person keeps their relationships") {
 	CHECK(db.loadRelationshipsForPerson("S1:P1").size() == 1);
 	CHECK(db.loadPerson("S1:P1")->gender.has_value());
 }
+
+TEST_CASE("loadChildLinks returns only ParentChild links where the person is the parent") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	for (const char* id : { "P1", "P2", "P3", "P4" }) {
+		gedcomx::Person p;
+		p.id = id;
+		db.save(p, "S1");
+	}
+
+	gedcomx::Relationship couple;
+	couple.id = "R1";
+	couple.type = "http://gedcomx.org/Couple";
+	couple.person1Id = "P1";
+	couple.person2Id = "P2";
+
+	gedcomx::Relationship toP3;  // P1 is a biological parent of P3
+	toP3.id = "R2";
+	toP3.type = "http://gedcomx.org/ParentChild";
+	toP3.person1Id = "P1";
+	toP3.person2Id = "P3";
+	gedcomx::Fact bio;
+	bio.id = "F1";
+	bio.type = "http://gedcomx.org/BiologicalParent";
+	toP3.facts.push_back(bio);
+
+	gedcomx::Relationship toP4;	 // P1 -> P4, parentage unspecified
+	toP4.id = "R3";
+	toP4.type = "http://gedcomx.org/ParentChild";
+	toP4.person1Id = "P1";
+	toP4.person2Id = "P4";
+
+	gedcomx::Relationship p2Top3;  // the other parent of P3
+	p2Top3.id = "R4";
+	p2Top3.type = "http://gedcomx.org/ParentChild";
+	p2Top3.person1Id = "P2";
+	p2Top3.person2Id = "P3";
+
+	db.saveAll({ couple, toP3, toP4, p2Top3 }, "S1");
+
+	auto links = db.loadChildLinks("S1:P1");
+	REQUIRE(links.size() == 2);  // the couple is excluded
+	CHECK(links[0].person2Id == "S1:P3");
+	CHECK(links[1].person2Id == "S1:P4");
+	REQUIRE(links[0].facts.size() == 1);
+	CHECK(links[0].facts[0].type == "http://gedcomx.org/BiologicalParent");
+	CHECK(links[1].facts.empty());  // unspecified stays unspecified
+
+	CHECK(db.loadChildLinks("S1:P2").size() == 1);  // the other parent sees only their own link
+	CHECK(db.loadChildLinks("S1:P3").empty());  // a child is not a parent
+}

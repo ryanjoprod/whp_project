@@ -45,6 +45,33 @@ namespace {
         ImGui::TextDisabled("Born: %s", birth && !birth->date.original.empty() ? birth->date.original.c_str() : "-");
         ImGui::TextDisabled("Died: %s", death && !death->date.original.empty() ? death->date.original.c_str() : "-");
     }
+
+    struct ParentageOption {
+        const char* label;
+        const char* typeUri;  // typeUri == nullptr -> no fact stored
+    };
+
+    constexpr int kNotAParent = 0;
+    constexpr int kUnspecified = 1;
+
+    const ParentageOption kParentage[] = {
+        { "Not a parent", nullptr },
+        { "Unspecified", nullptr },
+        { "Biological", "http://gedcomx.org/BiologicalParent" },
+        { "Adoptive", "http://gedcomx.org/AdoptiveParent" },
+        { "Step", "http://gedcomx.org/StepParent" },
+        { "Foster", "http://gedcomx.org/FosterParent" },
+        { "Guardian", "http://gedcomx.org/GuardianParent" },
+    };
+    constexpr int kParentageCount = IM_ARRAYSIZE(kParentage);
+
+    // Which picker entry does an existing link correspond to? No parentage fact = Unspecified.
+    int parentageIndexFor(const gedcomx::Relationship& link) {
+        for (const auto& f : link.facts)
+            for (int i = 2; i < kParentageCount; ++i)
+                if (f.type == kParentage[i].typeUri) return i;
+        return kUnspecified;
+    }
 }
 
 void Window::renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources) {
@@ -148,7 +175,87 @@ void Window::renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceD
     }
 }
 
-void Window::renderRelationshipEditorChildrenTab() {}
+void Window::renderRelationshipEditorChildrenTab() {
+    auto selected = [&](int slot) -> const gedcomx::Person* {
+        int i = selectedPersonIndex_[slot];
+        return (i >= 0 && i < (int)personSearchResults_[slot].size()) ? &personSearchResults_[slot][i] : nullptr;
+    };
+    const gedcomx::Person* parents[2] = { selected(0), selected(1) };
+    if (!parents[0] || !parents[1]) {
+        ImGui::TextDisabled("Select both people first.");
+        return;
+    }
+
+    //  --- add a child ---
+    if (ImGui::InputText("Add child", personSearchBuffer_[2], sizeof(personSearchBuffer_[2]))) {
+        pendingSearchQuery_[2] = personSearchBuffer_[2];
+    }
+
+    int pick = -1;
+    for (int i = 0; i < (int)personSearchResults_[2].size(); ++i) {
+        const auto& cand = personSearchResults_[2][i];
+        if (cand.id == parents[0]->id || cand.id == parents[1]->id) continue;  // can't be your own parent
+        bool alreadyStaged = std::any_of(stagedChildren_.begin(), stagedChildren_.end(),
+            [&](const StagedChild& c) {
+                return c.person.id == cand.id;
+        });
+        if (alreadyStaged) continue;
+
+        std::string label = cand.primaryFullText() + "##" + cand.id;
+        if (ImGui::Selectable(label.c_str())) pick = i;
+    }
+    if (pick >= 0) {
+        StagedChild sc;
+        sc.person = personSearchResults_[2][pick];
+        stagedChildren_.push_back(std::move(sc));
+        personSearchBuffer_[2][0] = '\0';
+        personSearchResults_[2].clear();
+    }
+
+    // --- staged children ---
+    ImGui::Separator();
+    if (stagedChildren_.empty()) ImGui::TextDisabled("No children");
+
+    int removeIndex = -1;
+    for (int i = 0; i < (int)stagedChildren_.size(); ++i) {
+        auto& c = stagedChildren_[i];
+        ImGui::PushID(i);
+
+        ImGui::Text("%s", c.person.primaryFullText().c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Remove")) removeIndex = i;
+
+        ImGui::Indent();
+        for (int slot = 0; slot < 2; ++slot) {
+            ImGui::PushID(slot);
+            ImGui::Text("%s:", parents[slot]->primaryFullText().c_str());
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(140.0f);
+            if (ImGui::BeginCombo("##parentage", kParentage[c.parentage[slot]].label)) {
+                for (int o = 0; o < kParentageCount; ++o) {
+                    if (ImGui::Selectable(kParentage[o].label, o == c.parentage[slot])) c.parentage[slot] = o;
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopID();
+        }
+        if (c.parentage[0] == kNotAParent && c.parentage[1] == kNotAParent) {
+            ImGui::TextDisabled("(no link will be saved for this person)");
+        }
+        ImGui::Unindent();
+
+        ImGui::PopID();
+    }
+
+    if (removeIndex >= 0) {
+        for (int slot = 0; slot < 2; ++slot) {
+            const auto& link = stagedChildren_[removeIndex].link[slot];
+            if (link)
+                removedChildLinkKeys_.push_back(link->sourceId + ":" + link->id);
+        }
+        stagedChildren_.erase(stagedChildren_.begin() + removeIndex);
+    }
+}
 
 void Window::renderRelationshipEditorEventsTab() {
     constexpr int kCount = IM_ARRAYSIZE(kRelFactTypes);
@@ -293,6 +400,8 @@ void Window::requestNewRelationshipEditor() {
     editingExistingRelationship_ = false;
 
     showNewRelationshipModal_ = true;
+
+    resetChildrenTabState();
 }
 
 void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, const gedcomx::Person& p1, const gedcomx::Person& p2) {
@@ -314,6 +423,9 @@ void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, con
     relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
 
     showNewRelationshipModal_ = true;
+
+    resetChildrenTabState();
+    pendingChildLoad_ = std::make_pair(p1.id, p2.id);
 }
 
 void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources) {
@@ -394,7 +506,7 @@ std::optional<std::pair<std::string, std::string>> Window::consumePersonSearchQu
 
     // Picker 0 (Person 1) is unrestricted; picker 1 (Person 2) is scoped to
     // whichever source Person 1 belongs to.
-    std::string sourceFilter = (pickerIndex == 1) ? relationshipSourceId_ : "";
+    std::string sourceFilter = (pickerIndex >= 1) ? relationshipSourceId_ : "";
     return std::make_pair(query, sourceFilter);
 }
 
@@ -406,4 +518,33 @@ std::optional<std::pair<gedcomx::Relationship, std::string>> Window::consumeRela
 
 void Window::setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results) {
     personSearchResults_[pickerIndex] = results;
+}
+
+void Window::resetChildrenTabState() {
+    stagedChildren_.clear();
+    removedChildLinkKeys_.clear();
+    pendingChildLoad_.reset();
+    personSearchBuffer_[2][0] = '\0';
+    personSearchResults_[2].clear();
+    pendingSearchQuery_[2].reset();
+}
+
+std::optional<std::pair<std::string, std::string>> Window::consumeChildLoadRequest() {
+    auto r = pendingChildLoad_;
+    pendingChildLoad_.reset();
+    return r;
+}
+
+void Window::setExistingChildren(const std::vector<ExistingChild>& children) {
+    stagedChildren_.clear();
+    removedChildLinkKeys_.clear();
+    for (const auto& ec : children) {
+        StagedChild sc;
+        sc.person = ec.child;
+        for (int slot = 0; slot < 2; ++slot) {
+            sc.link[slot] = ec.link[slot];
+            sc.parentage[slot] = ec.link[slot] ? parentageIndexFor(*ec.link[slot]) : kNotAParent;
+        }
+        stagedChildren_.push_back(std::move(sc));
+    }
 }

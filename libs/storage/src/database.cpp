@@ -316,6 +316,19 @@ namespace storage {
 			return rels;
 		}
 
+		std::vector<gedcomx::Relationship> loadChildLinks(const std::string& parentKey) {
+			std::vector<gedcomx::Relationship> rels;
+
+			query("SELECT row_key, local_id, source_id, type, person1_id, person2_id, confidence, lang "
+				"FROM relationships WHERE person1_id = ? AND type = ? ORDER BY row_key;",
+				{ parentKey, "http://gedcomx.org/ParentChild" },
+				[&](sqlite3_stmt* s) {
+					rels.push_back(loadRelationshipRow(s));
+				});
+
+			return rels;
+		}
+
 		void save(const gedcomx::Relationship& rel, const std::string& sourceId) {
 			Transaction tx(*this);
 			saveRelationshipRow(rel, sourceId);
@@ -950,17 +963,6 @@ namespace storage {
 			return sqlite3_last_insert_rowid(db_);
 		}
 
-		/*
-		template <typename RowFn>
-		void query(const std::string& sql, RowFn onRow) {
-			sqlite3_stmt* stmt = nullptr;
-			if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
-				throw std::runtime_error("Failed to prepare query: " + std::string(sqlite3_errmsg(db_)) + " | " + sqlSnippet(sql));
-			while (sqlite3_step(stmt) == SQLITE_ROW) onRow(stmt);
-			sqlite3_finalize(stmt);
-		}
-		*/
-
 		template <typename RowFn>
 		void query(const std::string& sql, const std::vector<std::string>& params, RowFn onRow) {
 			sqlite3_stmt* raw = nullptr;
@@ -1081,6 +1083,10 @@ namespace storage {
 
 	std::vector<gedcomx::Relationship> Database::loadRelationshipsForPerson(const std::string& personKey) {
 		return impl_->loadRelationshipsForPerson(personKey);
+	}
+
+	std::vector<gedcomx::Relationship> Database::loadChildLinks(const std::string& parentKey) {
+		return impl_->loadChildLinks(parentKey);
 	}
 
 	void Database::save(const gedcomx::Relationship& relationship, const std::string& sourceId) {

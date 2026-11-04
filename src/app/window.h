@@ -119,6 +119,12 @@ public:
 	void requestEditRelationshipEditor(const gedcomx::Relationship& relationship, const gedcomx::Person& person1, const gedcomx::Person& person2);
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
 	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
+	struct ExistingChild {
+		gedcomx::Person child;
+		std::optional<gedcomx::Relationship> link[2];  // [0] = from Person 1, [1] = from Person 2
+	};
+	std::optional<std::pair<std::string, std::string>> consumeChildLoadRequest();  // (parent1Key, parent2Key)
+	void setExistingChildren(const std::vector<ExistingChild>& children);
 
 	// Delete
 	struct DeleteRequest {
@@ -286,10 +292,6 @@ private:
 	// Relationship Modal state
 	gedcomx::Relationship workingRelationship_;
 	bool showNewRelationshipModal_ = false;
-	char personSearchBuffer_[2][128] = { "", "" };  // [0] = person1, [1] = person2
-	std::vector<gedcomx::Person> personSearchResults_[2];
-	int selectedPersonIndex_[2] = { -1, -1 };
-	std::optional<std::string> pendingSearchQuery_[2];
 	std::string relationshipSourceId_;  // set once Person 1 is picked; scopes Person 2's search 
 	int relEditingFactIndex_ = -1;
 	int relSelectedFactTypeIndex_ = 0;
@@ -308,6 +310,23 @@ private:
 	void renderRelationshipEditorEventsTab();
 	void renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderRelationshipEditorAttributesTab();
+
+	// Relationship Children tab
+	// widen the search arrays by one slot: [2] = the Children tab's child search
+	char personSearchBuffer_[3][128] = { "", "", "" };
+	std::vector<gedcomx::Person> personSearchResults_[3];
+	int selectedPersonIndex_[3] = { -1, -1, -1 };
+	std::optional<std::string> pendingSearchQuery_[3];
+
+	struct StagedChild {
+		gedcomx::Person person;
+		std::optional<gedcomx::Relationship> link[2];  // existing ParentChild link per parent, if any
+		int parentage[2] = { 1, 1 };  // index into kParentage; 1 = Unspecified
+	};
+	std::vector<StagedChild> stagedChildren_;
+	std::vector<std::string> removedChildLinkKeys_;  // existing links to delete on Save
+	std::optional<std::pair<std::string, std::string>> pendingChildLoad_;
+	void resetChildrenTabState();
 
 	// Delete
 	bool showDeleteConfirmModal_ = false;

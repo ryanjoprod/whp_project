@@ -70,6 +70,7 @@ namespace storage {
 
 		void saveRelationshipRow(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		std::vector<gedcomx::Relationship> loadRelationshipsForPerson(const std::string& personKey);
+		std::vector<gedcomx::Relationship> loadChildLinks(const std::string& parentKey);
 		void save(const gedcomx::Relationship& relationship, const std::string& sourceId);
 		void saveAll(const std::vector<gedcomx::Relationship>& relationships, const std::string& sourceId);
 		bool deleteRelationship(const std::string& relationshipKey);
