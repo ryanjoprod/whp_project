@@ -3,6 +3,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_library(gedcomx STATIC
 	src/gedcomx.cpp
 	src/parser.cpp
+	src/parent_child.cpp
 )
 
 target_include_directories(gedcomx PUBLIC include)

@@ -399,3 +399,55 @@ TEST_CASE("loadChildLinks returns only ParentChild links where the person is the
 	CHECK(db.loadChildLinks("S1:P2").size() == 1);  // the other parent sees only their own link
 	CHECK(db.loadChildLinks("S1:P3").empty());  // a child is not a parent
 }
+
+TEST_CASE("A bad child link rolls back the couple saved in the same transaction") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	db.save(p1, "S1");
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p2, "S1");
+
+	gedcomx::Relationship couple;
+	couple.id = "R1";
+	couple.type = "http://gedcomx.org/Couple";
+	couple.person1Id = "P1";
+	couple.person2Id = "P2";
+
+	gedcomx::Relationship link;
+	link.id = "R2";
+	link.type = "http://gedcomx.org/ParentChild";
+	link.person1Id = "P1";
+	link.person2Id = "NOBODY";  // child doesn't exist
+
+	CHECK_THROWS_AS(db.runInTransaction([&] {
+		db.save(couple, "S1");
+		db.saveAll({ link }, "S1");
+	}), std::runtime_error);
+
+	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());  // the couple went with it
+}
+
+TEST_CASE("A relationship without a type is rejected") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	db.save(p1, "S1");
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.person1Id = "P1";
+	rel.person2Id = "P2";  // type left empty
+
+	CHECK_THROWS_AS(db.save(rel, "S1"), std::runtime_error);
+}

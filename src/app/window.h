@@ -125,6 +125,14 @@ public:
 	};
 	std::optional<std::pair<std::string, std::string>> consumeChildLoadRequest();  // (parent1Key, parent2Key)
 	void setExistingChildren(const std::vector<ExistingChild>& children);
+	struct RelationshipSaveResult {
+		gedcomx::Relationship couple;
+		std::vector<gedcomx::Relationship> childLinks;
+		std::vector<std::string> deleteLinksIds;
+		std::string sourceId;
+		bool isEdit = false;
+	};
+	std::optional<RelationshipSaveResult> consumeRelationshipSaveResult();
 
 	// Delete
 	struct DeleteRequest {
@@ -324,9 +332,10 @@ private:
 		int parentage[2] = { 1, 1 };  // index into kParentage; 1 = Unspecified
 	};
 	std::vector<StagedChild> stagedChildren_;
-	std::vector<std::string> removedChildLinkKeys_;  // existing links to delete on Save
+	std::vector<gedcomx::Relationship> removedChildLinks_;  // existing links to delete on Save
 	std::optional<std::pair<std::string, std::string>> pendingChildLoad_;
 	void resetChildrenTabState();
+	std::optional<RelationshipSaveResult> relationshipSaveResult_;
 
 	// Delete
 	bool showDeleteConfirmModal_ = false;

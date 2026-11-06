@@ -554,8 +554,12 @@ void App::run() {
 					if (auto fresh = db_->loadPerson(rowKey)) visiblePeopleMap_[rowKey] = *fresh;
 				}
 				else {
-					currentRootKey_ = rowKey;
-					saveProject();
+					if (currentRootKey_.empty()) {  // first person in an empty canvas becomes the root
+						currentRootKey_ = rowKey;
+						saveProject();
+					}
+					// Otherwise leave the root alone, but make sure the new person is on screen right now.
+					if (auto fresh = db_->loadPerson(rowKey)) visiblePeopleMap_[rowKey] = *fresh;
 				}
 
 				if (!currentRootKey_.empty()) {
@@ -582,28 +586,22 @@ void App::run() {
 			}
 		}
 
-		if (auto batch = window_.consumeNewRelationshipRequest()) {
+		if (auto r = window_.consumeRelationshipSaveResult()) {
 			try {
-				const std::vector<gedcomx::Relationship>& relationship = batch->first;
-				const std::string& sourceId = batch->second;
-				db_->saveAll(relationship, sourceId);
+				db_->runInTransaction([&] {
+					db_->save(r->couple, r->sourceId);
+					if (!r->childLinks.empty()) db_->saveAll(r->childLinks, r->sourceId);
+					for (const auto& id : r->deleteLinksIds)
+						db_->deleteRelationship(r->sourceId + ":" + id);
+				});
 
-				if (!currentRootKey_.empty()) {
-					loadNeighborhood(currentRootKey_, neighborhoodDepth_);  // refresh to pick up the new edge
-				}
-			}
-			catch (const std::exception& e) {
-				Logger::log(LogLevel::Error, std::string("Failed to create relationship: ") + e.what());
-			}
-		}
+				// loadNeighborhood unions into the visible maps, so deleted links must leave the cache too.
+				for (const auto& id : r->deleteLinksIds)
+					visibleRelationshipsMap_.erase(r->sourceId + ":" + id);
 
-		if (auto edited = window_.consumeRelationshipEditResult()) {
-			try {
-				if (edited->second.empty()) {
-					Logger::log(LogLevel::Error, "Cannot save relationship: no source");
-				}
-				db_->save(edited->first, edited->second);
+				aggregateViewDirty_ = true;
 				if (!currentRootKey_.empty()) loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+				else rebuildVisibleVectors();
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to save relationship: ") + e.what());

@@ -3,6 +3,7 @@
 #include "window.h"
 #include "id_generator.h"
 #include "storage/database.h"
+#include "gedcomx/parent_child.h"
 
 namespace {
     const char* kRelFactTypes[] = {
@@ -57,11 +58,11 @@ namespace {
     const ParentageOption kParentage[] = {
         { "Not a parent", nullptr },
         { "Unspecified", nullptr },
-        { "Biological", "http://gedcomx.org/BiologicalParent" },
-        { "Adoptive", "http://gedcomx.org/AdoptiveParent" },
-        { "Step", "http://gedcomx.org/StepParent" },
-        { "Foster", "http://gedcomx.org/FosterParent" },
-        { "Guardian", "http://gedcomx.org/GuardianParent" },
+        { "Biological", gedcomx::kBiologicalParent },
+        { "Adoptive", gedcomx::kAdoptiveParent },
+        { "Step", gedcomx::kStepParent },
+        { "Foster", gedcomx::kFosterParent },
+        { "Guardian", gedcomx::kGuardianParent },
     };
     constexpr int kParentageCount = IM_ARRAYSIZE(kParentage);
 
@@ -204,6 +205,9 @@ void Window::renderRelationshipEditorChildrenTab() {
         std::string label = cand.primaryFullText() + "##" + cand.id;
         if (ImGui::Selectable(label.c_str())) pick = i;
     }
+    if (personSearchBuffer_[2][0] != '\0' && personSearchResults_[2].empty()) {
+        ImGui::TextDisabled("No matching people in this source.");
+    }
     if (pick >= 0) {
         StagedChild sc;
         sc.person = personSearchResults_[2][pick];
@@ -251,7 +255,7 @@ void Window::renderRelationshipEditorChildrenTab() {
         for (int slot = 0; slot < 2; ++slot) {
             const auto& link = stagedChildren_[removeIndex].link[slot];
             if (link)
-                removedChildLinkKeys_.push_back(link->sourceId + ":" + link->id);
+                removedChildLinks_.push_back(*link);
         }
         stagedChildren_.erase(stagedChildren_.begin() + removeIndex);
     }
@@ -466,17 +470,39 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
 
         ImGui::BeginDisabled(noPerson1 || noPerson2);
         if (ImGui::Button("Save")) {
-            gedcomx::Relationship result = workingRelationship_;
-            if (!editingExistingRelationship_) result.id = idgen::generateLocalId("R_");
-            result.type = "http://gedcomx.org/Couple";
-            result.person1Id = storage::stripRowKeyPrefix(personSearchResults_[0][selectedPersonIndex_[0]].id, relationshipSourceId_);
-            result.person2Id = storage::stripRowKeyPrefix(personSearchResults_[1][selectedPersonIndex_[1]].id, relationshipSourceId_);
+            RelationshipSaveResult out;
+            out.sourceId = relationshipSourceId_;
+            out.isEdit = editingExistingRelationship_;
 
-            if (editingExistingRelationship_)
-                editRelationshipResult_ = std::make_pair(result, relationshipSourceId_);
-            else
-                newRelationshipResult_ = std::make_pair(std::vector<gedcomx::Relationship>{ result }, relationshipSourceId_);
+            const std::string p1 = storage::stripRowKeyPrefix(personSearchResults_[0][selectedPersonIndex_[0]].id, relationshipSourceId_);
+            const std::string p2 = storage::stripRowKeyPrefix(personSearchResults_[1][selectedPersonIndex_[1]].id, relationshipSourceId_);
 
+            out.couple = workingRelationship_;
+            if (!editingExistingRelationship_)
+                out.couple.id = idgen::generateLocalId("R_");
+            out.couple.type = "http://gedcomx.org/Couple";
+            out.couple.person1Id = p1;
+            out.couple.person2Id = p2;
+
+            std::vector<gedcomx::ChildLinkInput> inputs;
+            for (const auto& c : stagedChildren_) {
+                gedcomx::ChildLinkInput in;
+                in.childId = storage::stripRowKeyPrefix(c.person.id, relationshipSourceId_);
+                for (int s = 0; s < 2; ++s) {
+                    const char* uri = kParentage[c.parentage[s]].typeUri;
+                    in.parent[s].isParent = (c.parentage[s] != kNotAParent);
+                    in.parent[s].parentageType = uri ? uri : "";
+                    in.parent[s].existingLink = c.link[s];
+                }
+                inputs.push_back(std::move(in));
+            }
+
+            auto plan = gedcomx::planChildLinks(p1, p2, inputs, removedChildLinks_,
+                [] { return idgen::generateLocalId("R_"); });
+            out.childLinks = std::move(plan.save);
+            out.deleteLinksIds = std::move(plan.deleteIds);
+
+            relationshipSaveResult_ = std::move(out);
             showNewRelationshipModal_ = false;
             ImGui::CloseCurrentPopup();
         }
@@ -492,13 +518,6 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
     }
 }
 
-std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> Window::consumeNewRelationshipRequest() {
-    auto result = newRelationshipResult_;
-    newRelationshipResult_.reset();
-
-    return result;
-}
-
 std::optional<std::pair<std::string, std::string>> Window::consumePersonSearchQuery(int pickerIndex) {
     if (!pendingSearchQuery_[pickerIndex]) return std::nullopt;
     std::string query = *pendingSearchQuery_[pickerIndex];
@@ -510,19 +529,13 @@ std::optional<std::pair<std::string, std::string>> Window::consumePersonSearchQu
     return std::make_pair(query, sourceFilter);
 }
 
-std::optional<std::pair<gedcomx::Relationship, std::string>> Window::consumeRelationshipEditResult() {
-    auto result = editRelationshipResult_;
-    editRelationshipResult_.reset();
-    return result;
-}
-
 void Window::setPersonSearchResults(int pickerIndex, const std::vector<gedcomx::Person>& results) {
     personSearchResults_[pickerIndex] = results;
 }
 
 void Window::resetChildrenTabState() {
     stagedChildren_.clear();
-    removedChildLinkKeys_.clear();
+    removedChildLinks_.clear();
     pendingChildLoad_.reset();
     personSearchBuffer_[2][0] = '\0';
     personSearchResults_[2].clear();
@@ -537,7 +550,7 @@ std::optional<std::pair<std::string, std::string>> Window::consumeChildLoadReque
 
 void Window::setExistingChildren(const std::vector<ExistingChild>& children) {
     stagedChildren_.clear();
-    removedChildLinkKeys_.clear();
+    removedChildLinks_.clear();
     for (const auto& ec : children) {
         StagedChild sc;
         sc.person = ec.child;
@@ -547,4 +560,10 @@ void Window::setExistingChildren(const std::vector<ExistingChild>& children) {
         }
         stagedChildren_.push_back(std::move(sc));
     }
+}
+
+std::optional<Window::RelationshipSaveResult> Window::consumeRelationshipSaveResult() {
+    auto r = std::move(relationshipSaveResult_);
+    relationshipSaveResult_.reset();
+    return r;
 }

@@ -242,6 +242,8 @@ namespace storage {
 		}
 
 		void saveRelationshipRow(const gedcomx::Relationship& rel, const std::string& sourceId) {
+			if (rel.type.empty()) throw std::runtime_error("Relationship has no type: " + rel.id);
+
 			std::string relKey = rowKey(sourceId, rel.id);
 			std::string p1Key = rowKey(sourceId, rel.person1Id);
 			std::string p2Key = rowKey(sourceId, rel.person2Id);
