@@ -181,28 +181,34 @@ void Window::renderRelationshipEditorChildrenTab() {
         int i = selectedPersonIndex_[slot];
         return (i >= 0 && i < (int)personSearchResults_[slot].size()) ? &personSearchResults_[slot][i] : nullptr;
     };
-    const gedcomx::Person* parents[2] = { selected(0), selected(1) };
-    if (!parents[0] || !parents[1]) {
+    const gedcomx::Person* p1 = selected(0);
+    const gedcomx::Person* p2 = selected(1);
+    if (!p1 || !p2) {
         ImGui::TextDisabled("Select both people first.");
         return;
     }
+    renderChildrenEditorBody(p1, p2);
+}
 
-    //  --- add a child ---
+void Window::renderChildrenEditorBody(const gedcomx::Person* parent1, const gedcomx::Person* parent2) {
+    const gedcomx::Person* parents[2] = { parent1, parent2 };
+    const int slotCount = parent2 ? 2 : 1;
+
+    // --- add a child ---
     if (ImGui::InputText("Add child", personSearchBuffer_[2], sizeof(personSearchBuffer_[2]))) {
         pendingSearchQuery_[2] = personSearchBuffer_[2];
     }
-
     ImGui::SameLine();
     if (ImGui::Button("+ New person...")) requestNewChildPersonEditor();
 
     int pick = -1;
     for (int i = 0; i < (int)personSearchResults_[2].size(); ++i) {
         const auto& cand = personSearchResults_[2][i];
-        if (cand.id == parents[0]->id || cand.id == parents[1]->id) continue;  // can't be your own parent
+        if (cand.id == parents[0]->id || (parents[1] && cand.id == parents[1]->id)) continue;  // cannot be your own parent
         bool alreadyStaged = std::any_of(stagedChildren_.begin(), stagedChildren_.end(),
             [&](const StagedChild& c) {
                 return c.person.id == cand.id;
-        });
+            });
         if (alreadyStaged) continue;
 
         std::string label = cand.primaryFullText() + "##" + cand.id;
@@ -233,7 +239,8 @@ void Window::renderRelationshipEditorChildrenTab() {
         if (ImGui::SmallButton("Remove")) removeIndex = i;
 
         ImGui::Indent();
-        for (int slot = 0; slot < 2; ++slot) {
+        bool noLink = true;
+        for (int slot = 0; slot < slotCount; ++slot) {
             ImGui::PushID(slot);
             ImGui::Text("%s:", parents[slot]->primaryFullText().c_str());
             ImGui::SameLine();
@@ -244,9 +251,10 @@ void Window::renderRelationshipEditorChildrenTab() {
                 }
                 ImGui::EndCombo();
             }
+            if (c.parentage[slot] != kNotAParent) noLink = false;
             ImGui::PopID();
         }
-        if (c.parentage[0] == kNotAParent && c.parentage[1] == kNotAParent) {
+        if (noLink) {
             ImGui::TextDisabled(c.isNew ? "(will be created without a parent link)" : "(no link will be saved for this person)");
         }
         ImGui::Unindent();
@@ -257,11 +265,32 @@ void Window::renderRelationshipEditorChildrenTab() {
     if (removeIndex >= 0) {
         for (int slot = 0; slot < 2; ++slot) {
             const auto& link = stagedChildren_[removeIndex].link[slot];
-            if (link)
-                removedChildLinks_.push_back(*link);
+            if (link) removedChildLinks_.push_back(*link);
         }
         stagedChildren_.erase(stagedChildren_.begin() + removeIndex);
     }
+}
+
+std::vector<gedcomx::ChildLinkInput> Window::collectChildInputs(int slotCount, std::vector<gedcomx::Person>& newPersons) const {
+    std::vector<gedcomx::ChildLinkInput> inputs;
+    for (const auto& c : stagedChildren_) {
+        gedcomx::ChildLinkInput in;
+        in.childId = storage::stripRowKeyPrefix(c.person.id, relationshipSourceId_);
+        if (c.isNew) {
+            gedcomx::Person np = c.person;
+            np.id = in.childId;  // local id for save()
+            np.sourceId = relationshipSourceId_;
+            newPersons.push_back(std::move(np));
+        }
+        for (int s = 0; s < slotCount; ++s) {
+            const char* uri = kParentage[c.parentage[s]].typeUri;
+            in.parent[s].isParent = (c.parentage[s] != kNotAParent);
+            in.parent[s].parentageType = uri ? uri : "";
+            in.parent[s].existingLink = c.link[s];
+        }
+        inputs.push_back(std::move(in));
+    }
+    return inputs;
 }
 
 void Window::renderRelationshipEditorEventsTab() {
@@ -489,24 +518,7 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
             out.couple.person1Id = p1;
             out.couple.person2Id = p2;
 
-            std::vector<gedcomx::ChildLinkInput> inputs;
-            for (const auto& c : stagedChildren_) {
-                gedcomx::ChildLinkInput in;
-                in.childId = storage::stripRowKeyPrefix(c.person.id, relationshipSourceId_);
-                if (c.isNew) {
-                    gedcomx::Person np = c.person;
-                    np.id = in.childId;  // local id for save()
-                    np.sourceId = relationshipSourceId_;
-                    out.newPersons.push_back(std::move(np));
-                }
-                for (int s = 0; s < 2; ++s) {
-                    const char* uri = kParentage[c.parentage[s]].typeUri;
-                    in.parent[s].isParent = (c.parentage[s] != kNotAParent);
-                    in.parent[s].parentageType = uri ? uri : "";
-                    in.parent[s].existingLink = c.link[s];
-                }
-                inputs.push_back(std::move(in));
-            }
+            auto inputs = collectChildInputs(2, out.newPersons);
 
             auto plan = gedcomx::planChildLinks(p1, p2, inputs, removedChildLinks_,
                 [] { return idgen::generateLocalId("R_"); });
@@ -577,4 +589,51 @@ std::optional<Window::RelationshipSaveResult> Window::consumeRelationshipSaveRes
     auto r = std::move(relationshipSaveResult_);
     relationshipSaveResult_.reset();
     return r;
+}
+
+void Window::requestAddChildren(const gedcomx::Person& parent) {
+    resetChildrenTabState();
+    soloParent_ = parent;
+    relationshipSourceId_ = parent.sourceId;  // children must share the parent's source
+    pendingChildLoad_ = std::make_pair(parent.id, std::string());  // second key empty: one parent
+    showChildrenEditor_ = true;
+}
+
+void Window::renderChildrenEditor(const std::vector<gedcomx::SourceDescription>& knownSources) {
+    if (showChildrenEditor_ && !ImGui::IsPopupOpen("Edit Children")) {
+        ImGui::OpenPopup("Edit Children");
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(560, 460), ImGuiCond_FirstUseEver);
+    if (ImGui::BeginPopupModal("Edit Children", &showChildrenEditor_)) {
+        ImGui::Text("Children of %s", soloParent_.primaryFullText().c_str());
+        ImGui::Separator();
+
+        renderChildrenEditorBody(&soloParent_, nullptr);
+        if (personEditorForChild_) renderPersonEditor(knownSources);  // "+ New person" renders inside this popup
+
+        ImGui::Separator();
+        if (ImGui::Button("Save")) {
+            RelationshipSaveResult out;
+            out.saveCouple = false;
+            out.sourceId = relationshipSourceId_;
+
+            const std::string parentId = storage::stripRowKeyPrefix(soloParent_.id, relationshipSourceId_);
+            auto inputs = collectChildInputs(1, out.newPersons);
+            auto plan = gedcomx::planChildLinks(parentId, "", inputs, removedChildLinks_,
+                [] { return idgen::generateLocalId("R_"); });
+            out.childLinks = std::move(plan.save);
+            out.deleteLinksIds = std::move(plan.deleteIds);
+                
+            relationshipSaveResult_ = std::move(out);
+            showChildrenEditor_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            showChildrenEditor_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }

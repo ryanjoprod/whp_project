@@ -17,6 +17,7 @@
 #include "gedcomx/fact.h"
 #include "gedcomx/source_description.h"
 #include "storage/database.h"
+#include "gedcomx/parent_child.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -89,7 +90,7 @@ public:
 
 	// Modal window state
 	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
-	std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> consumeNewRelationshipRequest();
+	// std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> consumeNewRelationshipRequest();
 	std::optional<std::string> consumeExportSourceRequest();
 	std::optional<std::string> consumeExportSavePath();
 
@@ -118,7 +119,7 @@ public:
 	void requestNewRelationshipEditor();
 	void requestEditRelationshipEditor(const gedcomx::Relationship& relationship, const gedcomx::Person& person1, const gedcomx::Person& person2);
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
-	std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
+	// std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
 	struct ExistingChild {
 		gedcomx::Person child;
 		std::optional<gedcomx::Relationship> link[2];  // [0] = from Person 1, [1] = from Person 2
@@ -132,9 +133,11 @@ public:
 		std::string sourceId;
 		bool isEdit = false;
 		std::vector<gedcomx::Person> newPersons;  // new children, save before the links
+		bool saveCouple = true;  // false for the parent-first editor: onlt children and links are saved
 	};
 	std::optional<RelationshipSaveResult> consumeRelationshipSaveResult();
 	void requestNewChildPersonEditor();  // the "+ New Person" in the Children tab
+	void requestAddChildren(const gedcomx::Person& parent);  // parent-first "edit children" for one person
 
 	// Delete
 	struct DeleteRequest {
@@ -353,6 +356,11 @@ private:
 	std::optional<RelationshipSaveResult> relationshipSaveResult_;
 
 	bool personEditorForChild_ = false;  // Person Editor is acting as "add child" for the Relationship Editor
+	bool showChildrenEditor_ = false;
+	gedcomx::Person soloParent_;
+	void renderChildrenEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderChildrenEditorBody(const gedcomx::Person* parent1, const gedcomx::Person* person2);  // parent2 may be null
+	std::vector<gedcomx::ChildLinkInput> collectChildInputs(int slotCount, std::vector<gedcomx::Person>& newPersons) const;
 
 	// Delete
 	bool showDeleteConfirmModal_ = false;

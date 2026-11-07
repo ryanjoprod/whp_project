@@ -427,6 +427,46 @@ void Window::renderDetailsPanel(
             ImGui::PopID();
         }
 
+        auto nameOf = [&](const std::string& id) {
+            auto it = std::find_if(people.begin(), people.end(), [&](const gedcomx::Person& p) { return p.id == id; });
+            return it != people.end() ? it->primaryFullText() : std::string("(not in view)");
+        };
+
+        auto parentageText = [](const gedcomx::Relationship& rel) {
+            std::string t = gedcomx::parentageTypeOf(rel);
+            return t.empty() ? std::string() : " - " + gedcomx::formatTypeUri(t);
+        };
+
+        bool shownParents = false;
+        for (const auto& rel : relationships) {
+            if (rel.type != gedcomx::kParentChildType || rel.person2Id != person.id) continue;
+            if (!shownParents) {
+                ImGui::Spacing();
+                ImGui::Text("Parents:");
+                shownParents = true;
+            }
+            ImGui::BulletText("%s%s", nameOf(rel.person1Id).c_str(), parentageText(rel).c_str());
+        }
+
+        bool shownChildren = false;
+        for (const auto& rel : relationships) {
+            if (rel.type != gedcomx::kParentChildType || rel.person1Id != person.id) continue;
+            if (!shownChildren) {
+                ImGui::Spacing();
+                ImGui::Text("Children:");
+                shownChildren = true;
+            }
+            ImGui::BulletText("%s%s", nameOf(rel.person2Id).c_str(), parentageText(rel).c_str());
+        }
+
+        ImGui::Spacing();
+        const bool aggregateKids = (viewMode_ == ViewMode::Aggregate);
+        ImGui::BeginDisabled(aggregateKids);
+        if (ImGui::Button("Add / Edit Children...")) requestAddChildren(person);
+        ImGui::EndDisabled();
+        if (aggregateKids && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Switch to All Sources or a single source to edit");
+
         ImGui::Spacing();
         if (ImGui::Button("Edit Person...")) {
             requestEditPersonEditor(person);

@@ -115,6 +115,7 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 
 	std::unordered_set<std::string> visitedPersons;
 	std::unordered_set<std::string> visitedRelationships;
+	std::vector<std::string> boundaryPersons;
 
 	// Third element: was this entry reached via a cross-source link? If so,
 	// it still gets to explore its own relationships once, even past the
@@ -145,7 +146,10 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 			Logger::log(LogLevel::Error, std::string("Failed to resolve linked persons: ") + e.what());
 		}
 
-		if (currentDepth >= depth && !viaLink) continue;  //stop expanding past the requested depth
+		if (currentDepth >= depth && !viaLink) {
+			boundaryPersons.push_back(personKey);  // not expanded
+			continue;  
+		}
 
 		for (const auto& rel : db_->loadRelationshipsForPerson(personKey)) {
 			const std::string relKey = rel.sourceId + ":" + rel.id;
@@ -161,9 +165,25 @@ void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {
 		}
 	}
 
+	// Edges *between* two people we already loaded belong on screen too. The walk stops
+	// expanding at the depth limit, so an edge joining two boundary people was never loaded
+	for (const auto& key : boundaryPersons) {
+		for (const auto& rel : db_->loadRelationshipsForPerson(key)) {
+			if (!visitedPersons.count(rel.person1Id) || !visitedPersons.count(rel.person2Id)) continue;
+			visibleRelationshipsMap_[rel.sourceId + ":" + rel.id] = rel;
+		}
+	}
+
 	evictFarthestUntilUnderCap();
 	rebuildVisibleVectors();
 	window_.requestRefit();
+}
+
+void App::reloadNeighborhoodFresh() {
+	visiblePeopleMap_.clear();
+	visibleRelationshipsMap_.clear();
+	if (!currentRootKey_.empty()) loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+	else rebuildVisibleVectors();
 }
 
 std::string App::loadSourceFile(const std::string& filePath) {
@@ -479,9 +499,7 @@ void App::run() {
 
 		if (auto newDepth = window_.consumeNeighborhoodDepthChange()) {
 			neighborhoodDepth_ = *newDepth;
-			if (!currentRootKey_.empty()) {
-				loadNeighborhood(currentRootKey_, neighborhoodDepth_);	// re-explore at the new depth
-			}
+			reloadNeighborhoodFresh();
 		}
 
 		if (auto newMax = window_.consumeMaxVisibleNodesChange()) {
@@ -543,10 +561,8 @@ void App::run() {
 
 		if (auto goKey = window_.consumeGoToPersonRequest()) {
 			try {
-				visiblePeopleMap_.clear();  // a jump starts a fresh view
-				visibleRelationshipsMap_.clear();
 				currentRootKey_ = *goKey;
-				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+				reloadNeighborhoodFresh();
 				saveProject();
 			}
 			catch (const std::exception& e) {
@@ -614,7 +630,7 @@ void App::run() {
 			try {
 				db_->runInTransaction([&] {
 					for (const auto& p : r->newPersons) db_->save(p, r->sourceId);
-					db_->save(r->couple, r->sourceId);
+					if (r->saveCouple) db_->save(r->couple, r->sourceId);
 					if (!r->childLinks.empty()) db_->saveAll(r->childLinks, r->sourceId);
 					for (const auto& id : r->deleteLinksIds)
 						db_->deleteRelationship(r->sourceId + ":" + id);
@@ -767,6 +783,7 @@ void App::run() {
 				const std::string parents[2] = { req->first, req->second };
 
 				for (int slot = 0; slot < 2; ++slot) {
+					if (parents[slot].empty()) continue;  // single-parent mode
 					for (auto& link : db_->loadChildLinks(parents[slot])) {
 						auto it = indexByChild.find(link.person2Id);
 						if (it == indexByChild.end()) {
