@@ -421,6 +421,7 @@ void App::run() {
 		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
 		window_.setProjectOpen(currentProject_.has_value());
 		window_.renderCreationModals(knownSources_);
+		window_.renderGoToPersonModal(knownSources_);
 		window_.renderDeleteConfirmModal();
 		window_.endFrame();
 
@@ -527,6 +528,29 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load neighborhood: ") + e.what());
+			}
+		}
+
+		if (auto goQuery = window_.consumeGoToSearchQuery()) {
+			try {
+				auto results = goQuery->empty() ? std::vector<gedcomx::Person>{} : db_->searchPersonsByName(*goQuery);
+				window_.setGoToSearchResults(results);
+			}										  
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Person search failed: ") + e.what());
+			}
+		}
+
+		if (auto goKey = window_.consumeGoToPersonRequest()) {
+			try {
+				visiblePeopleMap_.clear();  // a jump starts a fresh view
+				visibleRelationshipsMap_.clear();
+				currentRootKey_ = *goKey;
+				loadNeighborhood(currentRootKey_, neighborhoodDepth_);
+				saveProject();
+			}
+			catch (const std::exception& e) {
+			Logger::log(LogLevel::Error, std::string("Failed to go to person: ") + e.what());
 			}
 		}
 

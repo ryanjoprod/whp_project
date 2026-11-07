@@ -148,6 +148,18 @@ public:
 	ViewMode viewMode() const { return viewMode_; }
 	std::string viewModeSourceId() const { return viewModeSourceId_; }
 
+	// Go to person
+	void requestGoToPersonModal() {
+		showGoToModal_ = true;
+		goToSearchBuffer_[0] = '\0';
+		goToSearchResults_.clear();
+		selectedGoToIndex_ = -1;
+	}
+	void renderGoToPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources);
+	std::optional<std::string> consumeGoToSearchQuery();
+	void setGoToSearchResults(const std::vector<gedcomx::Person>& results);
+	std::optional<std::string> consumeGoToPersonRequest();  // row key to jump to
+
 private:
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
@@ -359,4 +371,12 @@ private:
 	int selectedLinkIndex_ = -1;
 	std::optional<std::string> pendingLinkSearchQuery_;
 	std::optional<std::pair<std::string, std::string>> linkPersonResult_;
+
+	// Person Search Modal
+	bool showGoToModal_ = false;
+	char goToSearchBuffer_[128] = "";
+	std::vector<gedcomx::Person> goToSearchResults_;
+	int selectedGoToIndex_ = -1;
+	std::optional<std::string> pendingGoToSearchQuery_;
+	std::optional<std::string> goToPersonResult_;
 };

@@ -258,6 +258,9 @@ void Window::renderCanvas(
                     contextRelationship_ = *best;
                     ImGui::OpenPopup("RelationshipContext");
                 }
+                else {
+                    ImGui::OpenPopup("CanvasContext");
+                }
             }
         }
     }
@@ -315,6 +318,13 @@ void Window::renderCanvas(
             }
             ImGui::EndDisabled();
         }
+        ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopup("CanvasContext")) {
+        ImGui::BeginDisabled(!projectOpen_);
+        if (ImGui::MenuItem("Go to Person...")) requestGoToPersonModal();
+        ImGui::EndDisabled();
         ImGui::EndPopup();
     }
 

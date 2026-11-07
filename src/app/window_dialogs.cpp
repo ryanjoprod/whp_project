@@ -608,3 +608,77 @@ std::optional<Window::DeleteRequest> Window::consumeDeleteRequest() {
     }
     return result;
 }
+
+// --- Go To Person Modal ---
+
+void Window::renderGoToPersonModal(const std::vector<gedcomx::SourceDescription>& knownSources) {
+    if (showGoToModal_ && !ImGui::IsPopupOpen("Go to Person")) {
+        ImGui::OpenPopup("Go to Person");
+    }
+
+    if (ImGui::BeginPopupModal("Go to Person", &showGoToModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();  // start typing immediately
+        if (ImGui::InputText("Search", goToSearchBuffer_, sizeof(goToSearchBuffer_))) {
+            pendingGoToSearchQuery_ = goToSearchBuffer_;
+            selectedGoToIndex_ = -1;
+        }
+
+        bool go = false;
+        if (ImGui::BeginChild("GoToResults", ImVec2(420, 220), true)) {
+            if (goToSearchResults_.empty()) {
+                ImGui::TextDisabled(goToSearchBuffer_[0] == '\0' ? "Type a name to search all sources." : "No matches.");
+            }
+            for (int i = 0; i < (int)goToSearchResults_.size(); ++i) {
+                const auto& p = goToSearchResults_[i];
+                std::string source = p.sourceId;
+                for (const auto& s : knownSources) {
+                    if (s.id == p.sourceId) {
+                        source = s.primaryTitle();
+                        break;
+                    }
+                }
+                std::string label = p.primaryFullText() + " (" + source + ")##" + p.id;
+                if (ImGui::Selectable(label.c_str(), i == selectedGoToIndex_, ImGuiSelectableFlags_AllowDoubleClick)) {
+                    selectedGoToIndex_ = i;
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) go = true;
+                }
+            }
+        }
+        ImGui::EndChild();  // always paired, even if BeginChild returned false
+
+        const bool noneSelected = selectedGoToIndex_ < 0 || selectedGoToIndex_ >= (int)goToSearchResults_.size();
+        ImGui::BeginDisabled(noneSelected);
+        if (ImGui::Button("Go")) go = true;
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            showGoToModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        if (go && !noneSelected) {
+            goToPersonResult_ = goToSearchResults_[selectedGoToIndex_].id;
+            showGoToModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+std::optional<std::string> Window::consumeGoToSearchQuery() {
+    auto r = pendingGoToSearchQuery_;
+    pendingGoToSearchQuery_.reset();
+    return r;
+}
+
+void Window::setGoToSearchResults(const std::vector<gedcomx::Person>& results) {
+    goToSearchResults_ = results;
+}
+
+std::optional<std::string> Window::consumeGoToPersonRequest() {
+    auto r = goToPersonResult_;
+    goToPersonResult_.reset();
+    if (r) selectedPersonId_ = *r;  // open Details for whoeve you landed on
+    return r;
+}

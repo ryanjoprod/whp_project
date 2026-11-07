@@ -37,6 +37,12 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
+            ImGui::BeginDisabled(!projectOpen_);
+            if (ImGui::MenuItem("Go to Person...")) {
+                requestGoToPersonModal();
+            }
+            ImGui::EndDisabled();
+            ImGui::Separator();
             ImGui::MenuItem("Layers");
             if (ImGui::MenuItem("Log")) {
                 toggleLogWindow();
