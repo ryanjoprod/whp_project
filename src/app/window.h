@@ -131,8 +131,10 @@ public:
 		std::vector<std::string> deleteLinksIds;
 		std::string sourceId;
 		bool isEdit = false;
+		std::vector<gedcomx::Person> newPersons;  // new children, save before the links
 	};
 	std::optional<RelationshipSaveResult> consumeRelationshipSaveResult();
+	void requestNewChildPersonEditor();  // the "+ New Person" in the Children tab
 
 	// Delete
 	struct DeleteRequest {
@@ -342,12 +344,15 @@ private:
 		gedcomx::Person person;
 		std::optional<gedcomx::Relationship> link[2];  // existing ParentChild link per parent, if any
 		int parentage[2] = { 1, 1 };  // index into kParentage; 1 = Unspecified
+		bool isNew = false;  // not in the database yet; save with the couple 
 	};
 	std::vector<StagedChild> stagedChildren_;
 	std::vector<gedcomx::Relationship> removedChildLinks_;  // existing links to delete on Save
 	std::optional<std::pair<std::string, std::string>> pendingChildLoad_;
 	void resetChildrenTabState();
 	std::optional<RelationshipSaveResult> relationshipSaveResult_;
+
+	bool personEditorForChild_ = false;  // Person Editor is acting as "add child" for the Relationship Editor
 
 	// Delete
 	bool showDeleteConfirmModal_ = false;

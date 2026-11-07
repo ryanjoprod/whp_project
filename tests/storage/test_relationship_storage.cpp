@@ -451,3 +451,40 @@ TEST_CASE("A relationship without a type is rejected") {
 
 	CHECK_THROWS_AS(db.save(rel, "S1"), std::runtime_error);
 }
+
+TEST_CASE("A new child is not created if the family save fails") {
+	storage::Database db(":memory:");
+
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	db.save(p1, "S1");
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p2, "S1");
+
+	gedcomx::Person child;
+	child.id = "P3";
+
+	gedcomx::Relationship couple;
+	couple.id = "R1";
+	couple.type = "http://gedcomx.org/Couple";
+	couple.person1Id = "P1";
+	couple.person2Id = "P2";
+
+	gedcomx::Relationship badLink;  // points at someone who doesn't exist
+	badLink.id = "R2";
+	badLink.type = "http://gedcomx.org/ParentChild";
+	badLink.person1Id = "P1";
+	badLink.person2Id = "NOBODY";
+
+	CHECK_THROWS_AS(db.runInTransaction([&] {
+		db.save(child, "S1");
+		db.save(couple, "S1");
+		db.saveAll({ badLink }, "S1");
+	}), std::runtime_error);
+
+	CHECK_FALSE(db.loadPerson("S1:P3").has_value());  // the child went with it
+	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());
+}

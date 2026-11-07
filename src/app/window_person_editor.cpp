@@ -20,6 +20,7 @@ namespace {
 }
 
 void Window::requestNewPersonEditor() {
+	personEditorForChild_ = false;
 	workingPerson_ = gedcomx::Person{};
 	editingExistingPerson_ = false;
 	editNames_.clear();
@@ -42,6 +43,7 @@ void Window::requestNewPersonEditor() {
 }
 
 void Window::requestEditPersonEditor(const gedcomx::Person& person) {
+	personEditorForChild_ = false;
 	workingPerson_ = person;
 	workingPerson_.id = storage::stripRowKeyPrefix(person.id, person.sourceId);
 	editingExistingPerson_ = true;
@@ -132,7 +134,7 @@ void Window::renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescrip
 		}
 	}
 
-	ImGui::BeginDisabled(editingExistingPerson_);
+	ImGui::BeginDisabled(editingExistingPerson_ || personEditorForChild_);
 	if (ImGui::BeginCombo("##EditSourceCombo",
 		selectedSourceIndex_ >= 0 && selectedSourceIndex_ < (int)knownSources.size()
 		? knownSources[selectedSourceIndex_].primaryTitle().c_str() : "Select a source...")) {
@@ -171,7 +173,7 @@ void Window::renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescrip
 	if (!pendingAutoSelectSourceId_.empty()) {
 		for (int i = 0; i < (int)knownSources.size(); ++i) {
 			if (knownSources[i].id == pendingAutoSelectSourceId_) {
-				selectedSourceIndex_ = 1;
+				selectedSourceIndex_ = i;
 				pendingAutoSelectSourceId_.clear();
 				break;
 			}
@@ -530,7 +532,17 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 				result.names.push_back(name);
 			}
 
-			personEditResult_ = std::make_pair(result, result.sourceId);
+			if (personEditorForChild_) {
+				StagedChild sc;
+				sc.person = result;
+				sc.person.id = result.sourceId + ":" + result.id;  // staged people use row-key ids, like search results
+				sc.isNew = true;
+				stagedChildren_.push_back(std::move(sc));
+				personEditorForChild_ = false;
+			}
+			else {
+				personEditResult_ = std::make_pair(result, result.sourceId);
+			}
 			showPersonEditor_ = false;
 			ImGui::CloseCurrentPopup();
 		}
@@ -544,6 +556,8 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 
 		ImGui::EndPopup();
 	}
+
+	if (!showPersonEditor_) personEditorForChild_ = false;
 }
 
 std::optional<std::pair<gedcomx::Person, std::string>> Window::consumePersonEditResult() {
@@ -551,4 +565,10 @@ std::optional<std::pair<gedcomx::Person, std::string>> Window::consumePersonEdit
 	personEditResult_.reset();
 
 	return result;
+}
+
+void Window::requestNewChildPersonEditor() {
+	requestNewPersonEditor();
+	workingPerson_.sourceId = relationshipSourceId_;  // the top strip resolves this
+	personEditorForChild_ = true;  // we lock the picker below
 }

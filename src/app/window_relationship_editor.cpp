@@ -192,6 +192,9 @@ void Window::renderRelationshipEditorChildrenTab() {
         pendingSearchQuery_[2] = personSearchBuffer_[2];
     }
 
+    ImGui::SameLine();
+    if (ImGui::Button("+ New person...")) requestNewChildPersonEditor();
+
     int pick = -1;
     for (int i = 0; i < (int)personSearchResults_[2].size(); ++i) {
         const auto& cand = personSearchResults_[2][i];
@@ -244,7 +247,7 @@ void Window::renderRelationshipEditorChildrenTab() {
             ImGui::PopID();
         }
         if (c.parentage[0] == kNotAParent && c.parentage[1] == kNotAParent) {
-            ImGui::TextDisabled("(no link will be saved for this person)");
+            ImGui::TextDisabled(c.isNew ? "(will be created without a parent link)" : "(no link will be saved for this person)");
         }
         ImGui::Unindent();
 
@@ -464,6 +467,8 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
             ImGui::EndTabBar();
         }
 
+        if (personEditorForChild_) renderPersonEditor(knownSources);  // Person Editor loading
+
         ImGui::Separator();
         bool noPerson1 = selectedPersonIndex_[0] < 0 || selectedPersonIndex_[0] >= (int)personSearchResults_[0].size();
         bool noPerson2 = selectedPersonIndex_[1] < 0 || selectedPersonIndex_[1] >= (int)personSearchResults_[1].size();
@@ -488,6 +493,12 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
             for (const auto& c : stagedChildren_) {
                 gedcomx::ChildLinkInput in;
                 in.childId = storage::stripRowKeyPrefix(c.person.id, relationshipSourceId_);
+                if (c.isNew) {
+                    gedcomx::Person np = c.person;
+                    np.id = in.childId;  // local id for save()
+                    np.sourceId = relationshipSourceId_;
+                    out.newPersons.push_back(std::move(np));
+                }
                 for (int s = 0; s < 2; ++s) {
                     const char* uri = kParentage[c.parentage[s]].typeUri;
                     in.parent[s].isParent = (c.parentage[s] != kNotAParent);

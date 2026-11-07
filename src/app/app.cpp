@@ -613,6 +613,7 @@ void App::run() {
 		if (auto r = window_.consumeRelationshipSaveResult()) {
 			try {
 				db_->runInTransaction([&] {
+					for (const auto& p : r->newPersons) db_->save(p, r->sourceId);
 					db_->save(r->couple, r->sourceId);
 					if (!r->childLinks.empty()) db_->saveAll(r->childLinks, r->sourceId);
 					for (const auto& id : r->deleteLinksIds)

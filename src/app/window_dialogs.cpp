@@ -242,7 +242,7 @@ std::optional<size_t> Window::consumeMaxVisibleNodesChange() {
 // --- Person Modal ---
 
 void Window::renderCreationModals(const std::vector<gedcomx::SourceDescription>& knownSources) {
-    renderPersonEditor(knownSources);
+    if (!personEditorForChild_) renderPersonEditor(knownSources);  // child mode renders inside the Relationship Editor
     renderRelationshipEditor(knownSources);
     renderExportModal(knownSources);
     renderLinkPersonModal();
