@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <unordered_set>
+#include <cmath>
 
 #include "window.h"
 #include "id_generator.h"
@@ -265,12 +266,43 @@ void Window::renderCanvas(
         }
     }
 
+    const ImU32 coupleColor = IM_COL32(150, 150, 150, 255);  // gray
+    const ImU32 parentChildColor = IM_COL32(214, 164, 84, 255);  // muted amber
+
     for (const auto& rel : relationships) {
         auto it1 = nodePositions_.find(rel.person1Id);
         auto it2 = nodePositions_.find(rel.person2Id);
-        if (it1 != nodePositions_.end() && it2 != nodePositions_.end()) {
-            drawList->AddLine(camera_.worldToScreen(it1->second), camera_.worldToScreen(it2->second), IM_COL32(150, 150, 150, 255), 2.0f);
+        if (it1 == nodePositions_.end() || it2 == nodePositions_.end()) continue;
+
+        const ImVec2 a = camera_.worldToScreen(it1->second);  // person1: the parent
+        const ImVec2 b = camera_.worldToScreen(it2->second);  // person2: the child
+
+        if (rel.type != gedcomx::kParentChildType) {
+            drawList->AddLine(a, b, coupleColor, 2.0f);
+            continue;
         }
+
+        const float dx = b.x - a.x, dy = b.y - a.y;
+        const float len = std::sqrt(dx * dx + dy * dy);
+        const float r = nodeRadius * camera_.zoom();  // child's on-screen radius
+        const float arrowLen = std::clamp(r * 0.6f, 6.0f, 14.0f);
+
+        if (len <= r + arrowLen) {
+            drawList->AddLine(a, b, parentChildColor, 2.0f);
+            continue;
+        }
+
+        const ImVec2 dir(dx / len, dy / len);
+        const ImVec2 perp(-dir.y, dir.x);
+        const ImVec2 tip(b.x - dir.x * r, b.y - dir.y * r);  // touches the child's edge
+        const ImVec2 base(tip.x - dir.x * arrowLen, tip.y - dir.y * arrowLen);
+        const float half = arrowLen * 0.45f;
+
+        drawList->AddLine(a, base, parentChildColor, 2.0f);
+        drawList->AddTriangleFilled(tip,
+            ImVec2(base.x + perp.x * half, base.y + perp.y * half),
+            ImVec2(base.x - perp.x * half, base.y - perp.y * half),
+            parentChildColor);
     }
 
     for (const auto& person : people) {
