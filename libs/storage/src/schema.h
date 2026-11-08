@@ -2,13 +2,32 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 4;
+	constexpr int kSchemaVersion = 5;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
 			id TEXT PRIMARY KEY,
 			title TEXT,
 			citation TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS citations (
+			id TEXT PRIMARY KEY,
+			source_id TEXT NOT NULL,
+			page TEXT,
+			date_original TEXT,
+			date_formal TEXT,
+			confidence TEXT,
+			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
+		);
+
+		CREATE TABLE IF NOT EXISTS citation_notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			citation_id TEXT NOT NULL,
+			lang TEXT,
+			subject TEXT,
+			text TEXT,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS persons (

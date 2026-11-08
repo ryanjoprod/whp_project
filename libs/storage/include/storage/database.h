@@ -13,6 +13,7 @@
 #include "gedcomx/event.h"
 #include "gedcomx/document.h"
 #include "gedcomx/place_description.h"
+#include "gedcomx/citation.h"
 
 namespace storage {
 	// Strips a known sourceId prefix off a row-key to recover the bare local id
@@ -77,6 +78,10 @@ namespace storage {
 
 		void save(const gedcomx::SourceDescription& source);
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions();
+
+		void save(const gedcomx::Citation& citation);  // upsert, notes replaced
+		std::optional<gedcomx::Citation> loadCitation(const std::string& id);
+		std::vector<gedcomx::Citation> loadCitationsForSource(const std::string& sourceId);
 
 		void save(const gedcomx::Agent& agent);
 		std::vector<gedcomx::Agent> loadAllAgents();

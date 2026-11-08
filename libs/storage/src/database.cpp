@@ -375,6 +375,56 @@ namespace storage {
 			return results;
 		}
 
+		void save(const gedcomx::Citation& c) {
+			Transaction tx(*this);
+			upsert("INSERT INTO citations (id, source_id, page, date_original, date_formal, confidence) VALUES (?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(id) "
+				"DO UPDATE SET source_id = excluded.source_id, page = excluded.page, date_original = excluded.date_original, "
+				"date_formal = excluded.date_formal, confidence = excluded.confidence;",
+				[&](sqlite3_stmt* s) {
+					bindText(s, 1, c.id);
+					bindText(s, 2, c.sourceId);
+					bindText(s, 3, c.page);
+					bindText(s, 4, c.date.original);
+					bindText(s, 5, c.date.formal);
+					bindText(s, 6, c.confidence);
+				});
+			saveNotesFor("citation_notes", "citation_id", c.id, c.notes);
+			tx.commit();
+		}
+
+		gedcomx::Citation loadCitationRow(sqlite3_stmt* s) {
+			gedcomx::Citation c;
+			c.id = columnText(s, 0);
+			c.sourceId = columnText(s, 1);
+			c.page = columnText(s, 2);
+			c.date.original = columnText(s, 3);
+			c.date.formal = columnText(s, 4);
+			c.confidence = columnText(s, 5);
+			c.notes = loadNotesFor("citation_notes", "citation_id", c.id);
+			return c;
+		}
+
+		std::optional<gedcomx::Citation> loadCitation(const std::string& id) {
+			std::optional<gedcomx::Citation> result;
+			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations WHERE id = ?;",
+				{ id },
+				[&](sqlite3_stmt* s) {
+					result = loadCitationRow(s);
+				});
+			return result;
+		}
+
+		std::vector<gedcomx::Citation> loadCitationsForSource(const std::string& sourceId) {
+			std::vector<gedcomx::Citation> results;
+			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations WHERE source_id = ? ORDER BY id;",
+				{ sourceId },
+				[&](sqlite3_stmt* s) {
+					results.push_back(loadCitationRow(s));
+				});
+			return results;
+		}
+
 		void save(const gedcomx::Agent& agent) {
 			upsert("INSERT OR IGNORE INTO agents (id) VALUES (?);",
 				[&](sqlite3_stmt* s) {
@@ -1109,6 +1159,18 @@ namespace storage {
 
 	std::vector<gedcomx::SourceDescription> Database::loadAllSourceDescriptions() {
 		return impl_->loadAllSourceDescriptions();
+	}
+
+	void Database::save(const gedcomx::Citation& citation) {
+		impl_->save(citation);
+	}
+
+	std::optional<gedcomx::Citation> Database::loadCitation(const std::string& id) {
+		return impl_->loadCitation(id);
+	}
+
+	std::vector<gedcomx::Citation> Database::loadCitationsForSource(const std::string& sourceId) {
+		return impl_->loadCitationsForSource(sourceId);
 	}
 
 	void Database::save(const gedcomx::Agent& agent) {

@@ -8,11 +8,13 @@ add_executable(whp_tests
 	gedcomx/test_relationship_serializer.cpp
 	gedcomx/test_source_description_serializer.cpp
 	gedcomx/test_source_export.cpp
+	gedcomx/test_parent_child.cpp
 	storage/test_person_storage.cpp
 	storage/test_aggregate_storage.cpp
 	storage/test_relationship_storage.cpp
 	storage/test_places_storage.cpp
- "gedcomx/test_parent_child.cpp")
+	storage/test_citation_storage.cpp
+)
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest)
