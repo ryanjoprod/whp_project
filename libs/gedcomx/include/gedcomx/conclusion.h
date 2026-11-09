@@ -11,7 +11,7 @@ namespace gedcomx {
 	};
 
 	struct SourceReference {
-		std::string sourceDescriptionId;  // resolved from "#S1" -> "S1"
+		std::string citationId;  // the Citation this reference points at (a bare one means "the source as a whole")
 	};
 
 	// Shared fields every GEDCOM X "conclusion" (Person, Relationship, Fact)

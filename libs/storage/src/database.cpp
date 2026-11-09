@@ -98,18 +98,12 @@ namespace storage {
 						bindText(s, 11, fact.conclusion.lang);
 					});
 
-				for (const auto& src : fact.conclusion.sources) {
-					upsert("INSERT INTO person_fact_sources (person_fact_id, source_description_id) VALUES (?, ?);",
-						[&](sqlite3_stmt* s) {
-							bindText(s, 1, factKey);
-							bindText(s, 2, src.sourceDescriptionId);
-						});
-				}
-
+				saveCitationsRefs("person_fact_citations", "person_fact_id", factKey, fact.conclusion.sources);
 				saveNotesFor("person_fact_notes", "person_fact_id", factKey, fact.conclusion.notes);
 			}
 
 			saveNotesFor("person_notes", "person_id", key, person.conclusion.notes);
+			saveCitationsRefs("person_citations", "person_id", key, person.conclusion.sources);
 			saveAddressesFor(key, person.addresses);
 			saveAttributesFor(key, person.attributes);
 
@@ -134,6 +128,7 @@ namespace storage {
 					person.conclusion.confidence = columnText(s, 3);
 					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
+					person.conclusion.sources = loadCitationRefsFor("person_citations", "person_id", key);
 					std::string genderType = columnText(s, 5);
 					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
 					person.attributes = loadAttributesFor(key);
@@ -217,6 +212,7 @@ namespace storage {
 					person.conclusion.confidence = columnText(s, 3);
 					person.conclusion.lang = columnText(s, 4);
 					person.conclusion.notes = loadNotesFor("person_notes", "person_id", key);
+					person.conclusion.sources = loadCitationRefsFor("person_citations", "person_id", key);
 					std::string genderType = columnText(s, 5);
 					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
 					person.attributes = loadAttributesFor(key);
@@ -263,14 +259,7 @@ namespace storage {
 					bindText(s, 8, rel.conclusion.lang);
 				});
 
-			exec("DELETE FROM relationship_sources WHERE relationship_id = ?;", { relKey });
-			for (const auto& relSrc : rel.conclusion.sources) {
-				upsert("INSERT INTO relationship_sources (relationship_id, source_description_id) VALUES (?, ?);",
-					[&](sqlite3_stmt* s) {
-						bindText(s, 1, relKey);
-						bindText(s, 2, relSrc.sourceDescriptionId);
-					});
-			}
+			saveCitationsRefs("relationship_citations", "relationship_id", relKey, rel.conclusion.sources);
 
 			exec("DELETE FROM relationship_facts WHERE relationship_id = ?;", { relKey });
 
@@ -293,14 +282,7 @@ namespace storage {
 						bindText(s, 11, fact.conclusion.lang);
 					});
 
-				for (const auto& src : fact.conclusion.sources) {
-					upsert("INSERT INTO relationship_fact_sources (relationship_fact_id, source_description_id) VALUES (? ,?);",
-						[&](sqlite3_stmt* s) {
-							bindText(s, 1, factKey);
-							bindText(s, 2, src.sourceDescriptionId);
-						});
-				}
-
+				saveCitationsRefs("relationship_fact_citations", "relationship_fact_id", factKey, fact.conclusion.sources);
 				saveNotesFor("relationship_fact_notes", "relationship_fact_id", factKey, fact.conclusion.notes);
 			}
 
@@ -423,6 +405,16 @@ namespace storage {
 					results.push_back(loadCitationRow(s));
 				});
 			return results;
+		}
+
+		std::string ensureBareCitation(const std::string& sourceId) {
+			const std::string id = gedcomx::bareCitationId(sourceId);
+			upsert("INSERT INTO citations (id, source_id) VALUES (?, ?) ON CONFLICT(id) DO NOTHING;",
+				[&](sqlite3_stmt* s) {
+					bindText(s, 1, id);
+					bindText(s, 2, sourceId);
+				});
+			return id;
 		}
 
 		void save(const gedcomx::Agent& agent) {
@@ -918,11 +910,11 @@ namespace storage {
 		}
 
 		std::vector<gedcomx::Fact> loadFactsForPerson(const std::string& personKey) {
-			return loadFacts("person_facts", "person_fact_notes", "person_fact_sources", "person_id", personKey);
+			return loadFacts("person_facts", "person_fact_notes", "person_fact_citations", "person_id", personKey);
 		}
 
 		std::vector<gedcomx::Fact> loadFactsForRelationship(const std::string& relKey) {
-			return loadFacts("relationship_facts", "relationship_fact_notes", "relationship_fact_sources", "relationship_id", relKey);
+			return loadFacts("relationship_facts", "relationship_fact_notes", "relationship_fact_citations", "relationship_id", relKey);
 		}
 
 		std::vector<gedcomx::Fact> loadFacts(const std::string& table, const std::string& notesTable, const std::string& sourcesTable, const std::string& fkColumn, const std::string& ownerKey) {
@@ -944,12 +936,8 @@ namespace storage {
 					std::string notesFk = (notesTable == "person_fact_notes") ? "person_fact_id" : "relationship_fact_id";
 					fact.conclusion.notes = loadNotesFor(notesTable, notesFk, factKey);
 
-					std::string sourcesFk = (sourcesTable == "person_fact_sources") ? "person_fact_id" : "relationship_fact_id";
-					query("SELECT source_description_id FROM " + sourcesTable + " WHERE " + sourcesFk + " = ?;", { factKey },
-						[&](sqlite3_stmt* ss) {
-							fact.conclusion.sources.push_back({ columnText(ss, 0) });
-						});
-
+					std::string sourcesFk = (sourcesTable == "person_fact_citations") ? "person_fact_id" : "relationship_fact_id";
+					fact.conclusion.sources = loadCitationRefsFor(sourcesTable, sourcesFk, factKey);
 					facts.push_back(std::move(fact));
 				});
 
@@ -1053,16 +1041,6 @@ namespace storage {
 			return notes;
 		}
 
-		std::vector <gedcomx::SourceReference>loadSourcesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
-			std::vector<gedcomx::SourceReference> sources;
-			query("SELECT source_description_id FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
-				[&](sqlite3_stmt* s) {
-					sources.push_back({ columnText(s, 0) });
-				});
-
-			return sources;
-		}
-
 		gedcomx::Relationship loadRelationshipRow(sqlite3_stmt* s) {
 			std::string relKey = columnText(s, 0);
 
@@ -1076,7 +1054,7 @@ namespace storage {
 			rel.conclusion.confidence = columnText(s, 6);
 			rel.conclusion.lang = columnText(s, 7);
 			rel.conclusion.notes = loadNotesFor("relationship_notes", "relationship_id", relKey);
-			rel.conclusion.sources = loadSourcesFor("relationship_sources", "relationship_id", relKey);
+			rel.conclusion.sources = loadCitationRefsFor("relationship_citations", "relationship_id", relKey);
 			
 			return rel;
 		}
@@ -1087,6 +1065,27 @@ namespace storage {
 			const bool deleted = sqlite3_changes(db_) > 0;  // counts only the row you asked for, not cascades
 			tx.commit();
 			return deleted;
+		}
+
+		void saveCitationsRefs(const std::string& table, const std::string& fkColumn, const std::string& ownerKey, const std::vector<gedcomx::SourceReference>& refs) {
+			exec("DELETE FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey });
+			for (const auto& ref : refs) {
+				upsert("INSERT INTO " + table + " (" + fkColumn + ", citation_id) VALUES (?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, ownerKey);
+						bindText(s, 2, ref.citationId);
+					});
+			}
+		}
+
+		std::vector<gedcomx::SourceReference> loadCitationRefsFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
+			std::vector<gedcomx::SourceReference> refs;
+			query("SELECT citation_id FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
+				[&](sqlite3_stmt* s) {
+					refs.push_back({ columnText(s, 0) });
+				});
+
+			return refs;
 		}
 	};
 
@@ -1171,6 +1170,10 @@ namespace storage {
 
 	std::vector<gedcomx::Citation> Database::loadCitationsForSource(const std::string& sourceId) {
 		return impl_->loadCitationsForSource(sourceId);
+	}
+
+	std::string Database::ensureBareCitation(const std::string& sourceId) {
+		return impl_->ensureBareCitation(sourceId);
 	}
 
 	void Database::save(const gedcomx::Agent& agent) {

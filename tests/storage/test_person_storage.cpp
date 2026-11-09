@@ -222,7 +222,7 @@ TEST_CASE("Deleting a person removes their relationships and links, not their pa
 
 	testutil::saveSource(db, "S1");
 	testutil::saveSource(db, "S2");
-	testutil::saveSource(db, "SD1");
+	testutil::saveSourceWithCitation(db, "SD1");
 
 	for (const char* id : { "P1", "P2", "P3" }) {
 		gedcomx::Person p;
@@ -242,7 +242,7 @@ TEST_CASE("Deleting a person removes their relationships and links, not their pa
 	gedcomx::Fact marriage;
 	marriage.id = "F1";
 	marriage.type = "http://gedcomx.org/Marriage";
-	marriage.conclusion.sources.push_back({ "SD1" });
+	marriage.conclusion.sources.push_back({ gedcomx::bareCitationId("SD1") });
 	couple.facts.push_back(marriage);
 
 	gedcomx::Relationship child;
@@ -299,4 +299,59 @@ TEST_CASE("Apostrophes in ids and names do not break storage") {
 	CHECK(loaded->primaryFullText() == "Jo D'Angelo");
 	CHECK(db.loadRelationshipsForPerson("S'1:P'1").size() == 1);
 	CHECK(db.deletePerson("S'1:P'1"));
+}
+
+TEST_CASE("A person's own citations are saved and loaded") {
+	storage::Database db(":memory:");
+
+	auto cite = testutil::saveSourceWithCitation(db, "SD1");
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p;
+	p.id = "P1";
+	p.conclusion.sources.push_back({ cite });
+	db.save(p, "S1");
+
+	auto loaded = db.loadPerson("S1:P1");
+	REQUIRE(loaded.has_value());
+	REQUIRE(loaded->conclusion.sources.size() == 1);
+	CHECK(loaded->conclusion.sources[0].citationId == cite);
+
+	p.conclusion.sources.clear();  // user removes it in the editor
+	db.save(p, "S1");
+	CHECK(db.loadPerson("S1:P1")->conclusion.sources.empty());
+}
+
+TEST_CASE("A person fact's citations are saved and loaded") {
+	storage::Database db(":memory:");
+
+	auto cite = testutil::saveSourceWithCitation(db, "SD1");
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p;
+	p.id = "P1";
+	gedcomx::Fact birth;
+	birth.id = "F1";
+	birth.type = "http://gedcomx.org/Birth";
+	birth.conclusion.sources.push_back({ cite });
+	p.facts.push_back(birth);
+	db.save(p, "S1");
+
+	auto loaded = db.loadPerson("S1:P1");
+	REQUIRE(loaded.has_value());
+	REQUIRE(loaded->facts.size() == 1);
+	REQUIRE(loaded->facts[0].conclusion.sources.size() == 1);
+	CHECK(loaded->facts[0].conclusion.sources[0].citationId == cite);
+}
+
+TEST_CASE("A person citing a citation that does not exist is rejected, person and all") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p;
+	p.id = "P1";
+	p.conclusion.sources.push_back({ "NO_SUCH_CITATION" });
+
+	CHECK_THROWS_AS(db.save(p, "S1"), std::runtime_error);
+	CHECK_FALSE(db.loadPerson("S1:P1").has_value());
 }

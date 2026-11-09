@@ -1,4 +1,5 @@
 #include "gedcomx/parser.h"
+#include "gedcomx/citation.h"
 
 #include <string>
 
@@ -165,8 +166,10 @@ namespace gedcomx {
 
 		if (j.contains("sources")) {
 			for (const auto& srcJson : j.at("sources")) {
+				const std::string descId = stripResourceRef(srcJson.value("description", nlohmann::json::object()).value("resource", ""));
+				if (descId.empty()) continue;
 				SourceReference ref;
-				ref.sourceDescriptionId = stripResourceRef(srcJson.value("description", nlohmann::json::object()).value("resource", ""));
+				ref.citationId = gedcomx::bareCitationId(descId);
 				conclusion.sources.push_back(std::move(ref));
 			}
 		}
@@ -358,7 +361,8 @@ namespace gedcomx {
 		if (!conclusion.sources.empty()) {
 			nlohmann::json sources = nlohmann::json::array();
 			for (const auto& src : conclusion.sources) {
-				sources.push_back({ {"description", {{"resource", "#" + src.sourceDescriptionId}}} });
+				const std::string target = gedcomx::bareCitationSourceId(src.citationId).value_or(src.citationId);
+				sources.push_back({ {"description", {{"resource", "#" + target}}} });
 			}
 			j["sources"] = sources;
 		}

@@ -18,3 +18,16 @@ TEST_CASE("Person round-trips through serialize/parse") {
     REQUIRE(reparsed.facts.size() == 1);
     CHECK(reparsed.facts[0].id == "F1");
 }
+
+TEST_CASE("A source reference maps to its bare citation and back") {
+    auto original = nlohmann::json::parse(
+        "{\"id\":\"P1\",\"sources\":[{\"description\":{\"resource\":\"#S1\"}}]}"
+    );
+
+    gedcomx::Person person = gedcomx::parsePerson(original);
+    REQUIRE(person.conclusion.sources.size() == 1);
+    CHECK(person.conclusion.sources[0].citationId == "CB_S1");
+
+    nlohmann::json out = gedcomx::serializePerson(person);
+    CHECK(out["sources"][0]["description"]["resource"] == "#S1");  // unchanged on the way out
+}

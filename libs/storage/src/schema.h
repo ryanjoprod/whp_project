@@ -2,7 +2,7 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 5;
+	constexpr int kSchemaVersion = 6;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
@@ -47,7 +47,15 @@ namespace storage {
 			subject TEXT,
 			text TEXT,
 			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
-		); 	 
+		); 
+
+		CREATE TABLE IF NOT EXISTS person_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
+		);	 
 
 		CREATE TABLE IF NOT EXISTS person_facts (
 			row_key TEXT PRIMARY KEY,
@@ -64,14 +72,6 @@ namespace storage {
 			FOREIGN KEY (person_id) REFERENCES persons(row_key)	ON DELETE CASCADE
 		);
 
-		CREATE TABLE IF NOT EXISTS person_fact_sources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			person_fact_id TEXT NOT NULL,
-			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE,
-			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
-		);
-
 		CREATE TABLE IF NOT EXISTS person_fact_notes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			person_fact_id TEXT NOT NULL,
@@ -79,6 +79,14 @@ namespace storage {
 			subject TEXT,
 			text TEXT,
 			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS person_fact_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_fact_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS person_links (
@@ -142,7 +150,15 @@ namespace storage {
 			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT,
 			FOREIGN KEY (person1_id) REFERENCES persons(row_key) ON DELETE CASCADE,
 			FOREIGN KEY (person2_id) REFERENCES persons(row_key) ON DELETE CASCADE
-		); 
+		);
+
+		CREATE TABLE IF NOT EXISTS relationship_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			relationship_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
+		);
 
 		CREATE TABLE IF NOT EXISTS relationship_notes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,14 +184,6 @@ namespace storage {
 			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key)	ON DELETE CASCADE
 		);
 
-		CREATE TABLE IF NOT EXISTS relationship_sources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			relationship_id TEXT NOT NULL,
-			source_description_id TEXT NOT NULL,
-			FOREIGN KEY (relationship_id) REFERENCES relationships(row_key) ON DELETE CASCADE,
-			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
-		);
-
 		CREATE TABLE IF NOT EXISTS relationship_fact_notes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			relationship_fact_id TEXT NOT NULL,
@@ -185,12 +193,12 @@ namespace storage {
 			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE
 		);
 
-		CREATE TABLE IF NOT EXISTS relationship_fact_sources (
+		CREATE TABLE IF NOT EXISTS relationship_fact_citations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			relationship_fact_id TEXT NOT NULL,
-			source_description_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
 			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE,
-			FOREIGN KEY (source_description_id) REFERENCES sources(id) ON DELETE RESTRICT
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS agents (

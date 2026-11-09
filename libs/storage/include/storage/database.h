@@ -82,6 +82,8 @@ namespace storage {
 		void save(const gedcomx::Citation& citation);  // upsert, notes replaced
 		std::optional<gedcomx::Citation> loadCitation(const std::string& id);
 		std::vector<gedcomx::Citation> loadCitationsForSource(const std::string& sourceId);
+		// Creates the source's bare citation if it doesn't exist yet; returns its id. Safe to call repeatedly
+		std::string ensureBareCitation(const std::string& sourceId);
 
 		void save(const gedcomx::Agent& agent);
 		std::vector<gedcomx::Agent> loadAllAgents();

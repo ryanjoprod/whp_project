@@ -73,7 +73,7 @@ TEST_CASE("Relationship sources round-trip through storage correctly") {
 	storage::Database db(":memory:");
 
 	testutil::saveSource(db, "S1");
-	testutil::saveSource(db, "SD1");
+	testutil::saveSourceWithCitation(db, "SD1");
 
 	gedcomx::Person person1;
 	person1.id = "P1";
@@ -104,7 +104,7 @@ TEST_CASE("Relationship sources round-trip through storage correctly") {
 	rel.facts.push_back(fact);
 
 	gedcomx::SourceReference srcRef;
-	srcRef.sourceDescriptionId = "SD1";
+	srcRef.citationId = gedcomx::bareCitationId("SD1");
 	rel.conclusion.sources.push_back(srcRef);
 
 	db.save(rel, "S1");
@@ -121,7 +121,7 @@ TEST_CASE("Relationship sources round-trip through storage correctly") {
 	CHECK(loadedRels[0].person1Id == "S1:P1");
 	CHECK(loadedRels[0].person2Id == "S1:P2");
 	CHECK(loadedRels[0].facts[0].type == "http://gedcomx.org/Marriage");
-	CHECK(loadedRels[0].conclusion.sources[0].sourceDescriptionId == "SD1");
+	CHECK(loadedRels[0].conclusion.sources[0].citationId == gedcomx::bareCitationId("SD1"));
 }
 
 TEST_CASE("Family relationship saveAll() correctly saves all relationships") {
@@ -236,8 +236,8 @@ TEST_CASE("Resaving a relationship replaces its citations") {
 	storage::Database db(":memory:");
 
 	testutil::saveSource(db, "S1");
-	testutil::saveSource(db, "SD1");
-	testutil::saveSource(db, "SD2");
+	testutil::saveSourceWithCitation(db, "SD1");
+	testutil::saveSourceWithCitation(db, "SD2");
 
 	gedcomx::Person p1;
 	p1.id = "P1";
@@ -251,7 +251,7 @@ TEST_CASE("Resaving a relationship replaces its citations") {
 	rel.type = "http://gedcomx.org/Couple";
 	rel.person1Id = "P1";
 	rel.person2Id = "P2";
-	rel.conclusion.sources = { { "SD1" },{ "SD2" } };
+	rel.conclusion.sources = { { gedcomx::bareCitationId("SD1") },{ gedcomx::bareCitationId("SD2") } };
 	db.save(rel, "S1");
 
 	REQUIRE(db.loadRelationshipsForPerson("S1:P1")[0].conclusion.sources.size() == 2);
@@ -262,7 +262,7 @@ TEST_CASE("Resaving a relationship replaces its citations") {
 	auto after = db.loadRelationshipsForPerson("S1:P1");
 	REQUIRE(after.size() == 1);
 	REQUIRE(after[0].conclusion.sources.size() == 1);
-	CHECK(after[0].conclusion.sources[0].sourceDescriptionId == "SD1");
+	CHECK(after[0].conclusion.sources[0].citationId == gedcomx::bareCitationId("SD1"));
 }
 
 TEST_CASE("saveAll rolls back the whole batch when one relationship is invalid") {
