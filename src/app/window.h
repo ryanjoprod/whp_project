@@ -307,6 +307,8 @@ private:
 
 	std::optional<std::pair<gedcomx::Person, std::string>> personEditResult_;
 
+	void renderCitationRefs(std::vector<gedcomx::SourceReference>& refs, int& addIndex, const std::vector<gedcomx::SourceDescription>& knownSources);
+
 	void renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderPersonEditorEventsTab();
 	void renderPersonEditorNamesTab();

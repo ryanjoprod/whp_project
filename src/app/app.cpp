@@ -239,7 +239,10 @@ std::string App::loadSourceFile(const std::string& filePath) {
 	try {
 		db_->runInTransaction([&] {
 			for (const auto& p : places) db_->save(p);
-			for (const auto& s : sourceDescriptions) db_->save(s);
+			for (const auto& s : sourceDescriptions) {
+				db_->save(s);
+				db_->ensureBareCitation(s.id);
+			}
 			for (const auto& p : people) db_->save(p, sourceId);
 			for (const auto& r : relationships) db_->save(r, sourceId);
 			for (const auto& a : agents) db_->save(a);
@@ -572,7 +575,10 @@ void App::run() {
 
 		if (auto newSource = window_.consumeNewSourceRequest()) {
 			try {
-				db_->save(*newSource);
+				db_->runInTransaction([&] {
+					db_->save(*newSource);
+					db_->ensureBareCitation(newSource->id);
+				});
 				knownSources_.push_back(*newSource);
 			}
 			catch (const std::exception& e) {

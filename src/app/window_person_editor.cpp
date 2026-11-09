@@ -288,49 +288,7 @@ void Window::renderPersonEditorEventsTab() {
 }
 
 void Window::renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources) {
-	for (int i = 0; i < (int)workingPerson_.conclusion.sources.size(); ++i) {
-		ImGui::PushID(i);
-		const auto& ref = workingPerson_.conclusion.sources[i];
-		auto it = std::find_if(knownSources.begin(), knownSources.end(),
-			[&](const gedcomx::SourceDescription& s) {
-				return s.id == ref.sourceDescriptionId;
-		});
-		std::string label = it != knownSources.end() ? it->primaryTitle() : ref.sourceDescriptionId;
-		ImGui::BulletText("%s", label.c_str());
-		ImGui::SameLine();
-		bool removed = false;
-		if (ImGui::SmallButton("Remove")) {
-			workingPerson_.conclusion.sources.erase(workingPerson_.conclusion.sources.begin() + i);
-			removed = true;
-		}
-		ImGui::PopID();
-		if (removed) break;
-	}
-
-	ImGui::Separator();
-	if (ImGui::BeginCombo("##addSourceCombo",
-		selectedSourceToAddIndex_ >= 0 && selectedSourceToAddIndex_ < (int)knownSources.size()
-		? knownSources[selectedSourceToAddIndex_].primaryTitle().c_str() : "Select a source to cite...")) {
-		renderSelectableList<gedcomx::SourceDescription>(
-			knownSources, &selectedSourceToAddIndex_,
-			[](const gedcomx::SourceDescription& s) { return s.primaryTitle(); },
-			[](const gedcomx::SourceDescription& s) { return s.id; }
-		);
-		ImGui::EndCombo();
-	}
-	ImGui::SameLine();
-	bool none = selectedSourceToAddIndex_ < 0 || selectedSourceToAddIndex_ >= (int)knownSources.size();
-	ImGui::BeginDisabled(none);
-	if (ImGui::Button("Add Citation")) {
-		std::string id = knownSources[selectedSourceToAddIndex_].id;
-		bool exists = std::any_of(workingPerson_.conclusion.sources.begin(), workingPerson_.conclusion.sources.end(),
-			[&](const gedcomx::SourceReference& r) {
-				return r.sourceDescriptionId == id;
-			});
-		if (!exists) workingPerson_.conclusion.sources.push_back({ id });
-		selectedSourceToAddIndex_ = -1;
-	}
-	ImGui::EndDisabled();
+	renderCitationRefs(workingPerson_.conclusion.sources, selectedSourceToAddIndex_, knownSources);
 }
 
 void Window::renderPersonEditorAttributesTab() {
