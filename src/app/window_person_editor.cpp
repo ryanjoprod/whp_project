@@ -95,7 +95,6 @@ void Window::requestEditPersonEditor(const gedcomx::Person& person) {
 	editingFactIndex_ = -1;
 	factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
 	selectedFactTypeIndex_ = 0;
-	selectedSourceToAddIndex_ = -1;
 
 	editingAttributeIndex_ = -1;
 	attrTypeBuffer_[0] = attrValueBuffer_[0] = '\0';
@@ -288,7 +287,7 @@ void Window::renderPersonEditorEventsTab() {
 }
 
 void Window::renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources) {
-	renderCitationRefs(workingPerson_.conclusion.sources, selectedSourceToAddIndex_, knownSources);
+	renderCitationRefs(CitationEditorOwner::Person, workingPerson_.conclusion.sources, knownSources);
 }
 
 void Window::renderPersonEditorAttributesTab() {
@@ -449,6 +448,8 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 			}
 			ImGui::EndTabBar();
 		}
+
+		renderCitationEditor(CitationEditorOwner::Person, knownSources);
 
 		ImGui::Separator();
 		bool noSource = selectedSourceIndex_ < 0 || selectedSourceIndex_ >= (int)knownSources.size();

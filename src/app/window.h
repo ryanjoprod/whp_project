@@ -18,6 +18,7 @@
 #include "gedcomx/source_description.h"
 #include "storage/database.h"
 #include "gedcomx/parent_child.h"
+#include "gedcomx/citation.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -165,6 +166,11 @@ public:
 	void setGoToSearchResults(const std::vector<gedcomx::Person>& results);
 	std::optional<std::string> consumeGoToPersonRequest();  // row key to jump to
 
+	void setKnownCitations(const std::vector<gedcomx::Citation>& citations) {
+		knownCitations_ = citations;
+	}
+	std::optional<gedcomx::Citation> consumeCitationSave();
+
 private:
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
@@ -303,11 +309,40 @@ private:
 	int editingFactIndex_ = -1;  // -1 = adding; >=0 = editing that index
 
 	int selectedSourceIndex_ = -1;
-	int selectedSourceToAddIndex_ = -1;  // Sources tab's "add citation picker"
+
+	// --- Citation Editor (one popup, shared by the Person and Relationship editors) ---
+	enum class CitationEditorOwner { None, Person, Relationship };
+
+	struct EditableCitationNote {
+		std::string lang, subject;  // kept as loaded; the UI only edits the text
+		char text[2048] = "";
+	};
+
+	std::vector<gedcomx::Citation> knownCitations_;  // pushed by App; includes bare citations
+	std::string lastCitedSourceId_;  // preselected the next time the editor opens
+	CitationEditorOwner citationEditorOwner_ = CitationEditorOwner::None;
+	bool showCitationEditor_ = false;
+	bool citationSourceLocked_ = false;  // true when editing an existing citation from the list
+	std::string pendingCitationSourceId_;  // resolved against knownSources on the next frame
+	int citationSourceIndex_ = -1;
+	int citationConfidenceIndex_ = 0;
+	gedcomx::Citation workingCitation_;  // empty id = a new citation
+	char citationPageBuffer_[256] = "";
+	char citationDateBuffer_[128] = "";
+	std::vector<EditableCitationNote> citationNotes_;
+	std::optional<gedcomx::Citation> citationSaveResults_;
+
+	void renderCitationRefs(CitationEditorOwner owner,
+		std::vector<gedcomx::SourceReference>& refs,
+		const std::vector<gedcomx::SourceDescription>& knownSources);
+	void openCitationEditor(CitationEditorOwner owner, const gedcomx::Citation* existing);
+	void renderCitationEditor(CitationEditorOwner owner, const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderCitationEditorNotesTab();
+	void fillCitationForm(const gedcomx::Citation& c);
+	void startNewCitationForm();
+	std::vector<gedcomx::SourceReference>& citationTargetRefs();
 
 	std::optional<std::pair<gedcomx::Person, std::string>> personEditResult_;
-
-	void renderCitationRefs(std::vector<gedcomx::SourceReference>& refs, int& addIndex, const std::vector<gedcomx::SourceDescription>& knownSources);
 
 	void renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderPersonEditorEventsTab();
@@ -322,7 +357,6 @@ private:
 	std::string relationshipSourceId_;  // set once Person 1 is picked; scopes Person 2's search 
 	int relEditingFactIndex_ = -1;
 	int relSelectedFactTypeIndex_ = 0;
-	int relSelectedSourceToAddIndex_ = -1;
 	char relFactTypeCustomBuffer_[256] = "";
 	char relFactDateBuffer_[128] = "";
 	char relFactPlaceBuffer_[128] = "";

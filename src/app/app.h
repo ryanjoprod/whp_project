@@ -47,6 +47,8 @@ private:
 	void evictFarthestUntilUnderCap();
 
 	std::vector<gedcomx::SourceDescription> knownSources_;
+	std::vector<gedcomx::Citation> knownCitations_;
+	void refreshKnownCitations();
 
 	std::string pendingExportSourceId_;
 

@@ -375,7 +375,7 @@ void Window::renderRelationshipEditorEventsTab() {
 }
 
 void Window::renderRelationshipEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources) {
-    renderCitationRefs(workingRelationship_.conclusion.sources, relSelectedSourceToAddIndex_, knownSources);
+    renderCitationRefs(CitationEditorOwner::Relationship, workingRelationship_.conclusion.sources, knownSources);
 }
 
 void Window::renderRelationshipEditorAttributesTab() {}
@@ -390,7 +390,6 @@ void Window::requestNewRelationshipEditor() {
         pendingSearchQuery_[i].reset();
     }
     relationshipSourceId_.clear();
-    relSelectedSourceToAddIndex_ = -1;
 
     editingExistingRelationship_ = false;
 
@@ -414,7 +413,6 @@ void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, con
     
     relEditingFactIndex_ = -1;
     relSelectedFactTypeIndex_ = 0;
-    relSelectedSourceToAddIndex_ = -1;
     relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
 
     showNewRelationshipModal_ = true;
@@ -456,6 +454,7 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
         }
 
         if (personEditorForChild_) renderPersonEditor(knownSources);  // Person Editor loading
+        renderCitationEditor(CitationEditorOwner::Relationship, knownSources);
 
         ImGui::Separator();
         bool noPerson1 = selectedPersonIndex_[0] < 0 || selectedPersonIndex_[0] >= (int)personSearchResults_[0].size();

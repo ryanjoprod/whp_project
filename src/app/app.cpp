@@ -64,6 +64,7 @@ void App::openProject(const std::string& whoprojPath) {
 	db_ = std::make_unique<storage::Database>(projectFolder + "/" + currentProject_->dbFile);
 
 	knownSources_ = db_->loadAllSourceDescriptions();
+	refreshKnownCitations();
 
 	neighborhoodDepth_ = currentProject_->settings.neighborhoodDepth;
 	maxVisibleNodes_ = currentProject_->settings.maxVisibleNodes;
@@ -109,6 +110,8 @@ void App::closeCurrentProject() {
 	visibleRelationships_.clear();
 	currentRootKey_.clear();
 	knownSources_.clear();
+	knownCitations_.clear();
+	window_.setKnownCitations(knownCitations_);
 }
 
 void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {						
@@ -415,6 +418,11 @@ void App::rebuildAggregateView() {
 	aggregateViewDirty_ = false;
 }
 
+void App::refreshKnownCitations() {
+	knownCitations_ = db_->loadAllCitations();
+	window_.setKnownCitations(knownCitations_);
+}
+
 void App::run() {
 	while (window_.isRunning()) {
 		window_.processEvents();
@@ -583,6 +591,16 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to create source: ") + e.what());
+			}
+		}
+
+		if (auto citation = window_.consumeCitationSave()) {
+			try {
+				db_->save(*citation);
+				refreshKnownCitations();
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to save citation: ") + e.what());
 			}
 		}
 

@@ -407,6 +407,16 @@ namespace storage {
 			return results;
 		}
 
+		std::vector<gedcomx::Citation> loadAllCitations() {
+			std::vector<gedcomx::Citation> results;
+			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations ORDER BY source_id, id;",
+				{},
+				[&](sqlite3_stmt* s) {
+					results.push_back(loadCitationRow(s));
+				});
+			return results;
+		}
+
 		std::string ensureBareCitation(const std::string& sourceId) {
 			const std::string id = gedcomx::bareCitationId(sourceId);
 			upsert("INSERT INTO citations (id, source_id) VALUES (?, ?) ON CONFLICT(id) DO NOTHING;",
@@ -1170,6 +1180,10 @@ namespace storage {
 
 	std::vector<gedcomx::Citation> Database::loadCitationsForSource(const std::string& sourceId) {
 		return impl_->loadCitationsForSource(sourceId);
+	}
+
+	std::vector<gedcomx::Citation> Database::loadAllCitations() {
+		return impl_->loadAllCitations();
 	}
 
 	std::string Database::ensureBareCitation(const std::string& sourceId) {

@@ -15,6 +15,7 @@ add_executable(app
 	logger.cpp
 	app_settings.cpp
 	id_generator.cpp
-	window_citations.cpp)
+	window_citations.cpp
+)
 
 target_link_libraries(app PRIVATE storage SDL3::SDL3-shared imgui::imgui)
