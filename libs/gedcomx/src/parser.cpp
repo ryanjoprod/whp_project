@@ -223,6 +223,11 @@ namespace gedcomx {
 			}
 		}
 
+		source.author = j.value("author", "");
+		source.publication = j.value("publication", "");
+		source.abbreviation = j.value("abbreviation", "");
+		source.notes = parseNotes(j);
+
 		return source;
 	}
 
@@ -639,6 +644,13 @@ namespace gedcomx {
 			}
 			j["citations"] = citations;
 		}
+
+		// author, publication and abbreviation are not GEDCOM X properties: app extensions.
+		// (GEDCOM X's "authors" and "publisher" are Agent references, so plain text has no standard home.)
+		if (!source.author.empty()) j["author"] = source.author;
+		if (!source.publication.empty()) j["publication"] = source.publication;
+		if (!source.abbreviation.empty()) j["abbreviation"] = source.abbreviation;
+		if (!source.notes.empty()) j["notes"] = serializeNotes(source.notes);
 
 		return j;
 	}

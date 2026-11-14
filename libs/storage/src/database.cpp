@@ -333,25 +333,36 @@ namespace storage {
 		}
 
 		void save(const gedcomx::SourceDescription& source) {
-			upsert("INSERT INTO sources (id, title, citation) VALUES (?, ?, ?) "
+			Transaction tx(*this);
+			upsert("INSERT INTO sources (id, title, citation, author, publication, abbreviation) "
+				"VALUES (?, ?, ?, ?, ?, ?) "
 				"ON CONFLICT(id) "
-				"DO UPDATE SET title = excluded.title, citation = excluded.citation;",
+				"DO UPDATE SET title = excluded.title, citation = excluded.citation, author = excluded.author, publication = excluded.publication, abbreviation = excluded.abbreviation;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, source.id);
 					bindText(s, 2, source.primaryTitle());
 					bindText(s, 3, source.citations.empty() ? "" : source.citations[0].value);
-			});
+					bindText(s, 4, source.author);
+					bindText(s, 5, source.publication);
+					bindText(s, 6, source.abbreviation);
+				});
+			saveNotesFor("source_notes", "source_id", source.id, source.notes);
+			tx.commit();
 		}
 
 		std::vector<gedcomx::SourceDescription> loadAllSourceDescriptions() {
 			std::vector<gedcomx::SourceDescription> results;
 
-			query("SELECT id, title, citation FROM sources;", {},
+			query("SELECT id, title, citation, author, publication, abbreviation FROM sources;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::SourceDescription src;
 					src.id = columnText(s, 0);
 					src.titles.push_back({ "", columnText(s, 1) });
 					src.citations.push_back({ "", columnText(s, 2) });
+					src.author = columnText(s, 3);
+					src.publication = columnText(s, 4);
+					src.abbreviation = columnText(s, 5);
+					src.notes = loadNotesFor("source_notes", "source_id", src.id);
 					results.push_back(std::move(src));
 				});
 
