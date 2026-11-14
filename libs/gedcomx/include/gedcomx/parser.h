@@ -13,6 +13,7 @@
 #include "gedcomx/event.h"
 #include "gedcomx/document.h"
 #include "gedcomx/place_description.h"
+#include "gedcomx/citation.h"
 
 namespace gedcomx {
 	Person parsePerson(const nlohmann::json& j);
@@ -41,6 +42,10 @@ namespace gedcomx {
 	PlaceDescription parsePlaceDescription(const nlohmann::json& j);
 	std::vector<PlaceDescription> parsePlaceDescriptions(const nlohmann::json& document);
 
+	std::vector<Citation> parseCitations(const nlohmann::json& document);
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations);
+	nlohmann::json serializeCitation(const gedcomx::Citation& citation);
+
 	// --- Serializers ---
 
 	nlohmann::json serializeConclusion(const gedcomx::Conclusion& conclusion);
@@ -48,5 +53,10 @@ namespace gedcomx {
 	nlohmann::json serializePerson(const gedcomx::Person& person);
 	nlohmann::json serializeRelationship(const gedcomx::Relationship& rel);
 	nlohmann::json serializeSourceDescription(const gedcomx::SourceDescription& source);
-	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source, const std::vector<gedcomx::Person>& persons, const std::vector<gedcomx::Relationship>& relationships);
+	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source,
+		const std::vector<gedcomx::Person>& persons,
+		const std::vector<gedcomx::Relationship>& relationships,
+		const std::vector<gedcomx::SourceDescription>& otherSources = {},
+		const std::vector<gedcomx::Citation>& citations = {}
+	);
 }

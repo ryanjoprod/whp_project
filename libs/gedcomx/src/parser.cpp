@@ -2,12 +2,79 @@
 #include "gedcomx/citation.h"
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 	// GEDCOM X references look like "#P1" - the '#' means "local id in this
 	// same document." Strip it since we store bare ids ourselves.
 	std::string stripResourceRef(const std::string& ref) {
 		return (!ref.empty() && ref[0] == '#') ? ref.substr(1) : ref;
+	}
+
+	std::vector<gedcomx::Note> parseNotes(const nlohmann::json& j) {
+		std::vector<gedcomx::Note> notes;
+		if (j.contains("notes")) {
+			for (const auto& noteJson : j.at("notes")) {
+				gedcomx::Note note;
+				note.lang = noteJson.value("lang", "");
+				note.subject = noteJson.value("subject", "");
+				note.text = noteJson.value("text", "");
+				notes.push_back(std::move(note));
+			}
+		}
+
+		return notes;
+	}
+
+	nlohmann::json serializeNotes(const std::vector<gedcomx::Note>& notes) {
+		nlohmann::json out = nlohmann::json::array();
+		for (const auto& note : notes) {
+			nlohmann::json n;
+			if (!note.lang.empty()) n["lang"] = note.lang;
+			if (!note.subject.empty()) n["subject"] = note.subject;
+			n["text"] = note.text;
+			out.push_back(n);
+		}
+
+		return out;
+	}
+
+	// component id -> id of the description it is a component of. Only counts parents that	are in the document.
+	std::unordered_map<std::string, std::string> componentParents(const nlohmann::json& document) {
+		std::unordered_set<std::string> ids;
+		for (const auto& j : document.at("sourceDescriptions"))
+			ids.insert(j.value("id", ""));
+
+		std::unordered_map<std::string, std::string> parents;
+		for (const auto& j : document.at("sourceDescriptions")) {
+			if (!j.contains("componentOf")) continue;
+			const std::string id = j.value("id", "");
+			const std::string parent = stripResourceRef(j.at("componentOf").value("description", ""));
+			if (!id.empty() && parent != id && ids.count(parent)) parents[id] = parent;
+		}
+
+		return parents;
+	}
+
+	// Follows componentOf up to the real source. Empty if the chain loops.
+	std::string rootSourceId(const std::unordered_map<std::string, std::string>& parents, const std::string& id) {
+		std::string current = id;
+		for (size_t steps = 0; steps <= parents.size(); ++steps) {  // the cap stops a cycle from looping forever
+			auto it = parents.find(current);
+			if (it == parents.end()) return current;
+			current = it->second;
+		}
+
+		return "";
+	}
+
+	void remapRefs(std::vector<gedcomx::SourceReference>& refs, const std::unordered_set<std::string>& citationIds) {
+		for (auto& ref : refs) {
+			auto sourceId = gedcomx::bareCitationSourceId(ref.citationId);
+			if (sourceId && citationIds.count(*sourceId))
+				ref.citationId = *sourceId;
+		}
 	}
 }
 
@@ -119,7 +186,9 @@ namespace gedcomx {
 		std::vector<SourceDescription> sources;
 
 		if (document.contains("sourceDescriptions")) {
+			const auto components = componentParents(document);
 			for (const auto& j : document.at("sourceDescriptions")) {
+				if (components.count(j.value("id", ""))) continue;  // a citation; see parseCitations
 				sources.push_back(parseSourceDescription(j));
 			}
 		}
@@ -174,16 +243,7 @@ namespace gedcomx {
 			}
 		}
 
-		if (j.contains("notes")) {
-			for (const auto& noteJson : j.at("notes")) {
-				Note note;
-				note.lang = noteJson.value("lang", "");
-				note.subject = noteJson.value("subject", "");
-				note.text = noteJson.value("text", "");
-
-				conclusion.notes.push_back(std::move(note));
-			}
-		}
+		conclusion.notes = parseNotes(j);
 
 		return conclusion;
 	}
@@ -351,6 +411,52 @@ namespace gedcomx {
 		return places;
 	}
 
+	std::vector<Citation> parseCitations(const nlohmann::json& document) {
+		std::vector<Citation> citations;
+		if (!document.contains("sourceDescriptions")) return citations;
+
+		const auto parents = componentParents(document);
+		for (const auto& j : document.at("sourceDescriptions")) {
+			const std::string id = j.value("id", "");
+			if (!parents.count(id)) continue;
+
+			Citation c;
+			c.id = id;
+			c.sourceId = rootSourceId(parents, id);
+			if (c.sourceId.empty()) continue;  // componentOf loop: garbage in, skipped
+
+			if (j.contains("citations") && !j.at("citations").empty())
+				c.page = j.at("citations")[0].value("value", "");
+			if (j.contains("coverage") && !j.at("coverage").empty() && j.at("coverage")[0].contains("temporal")) {
+				const auto& temporal = j.at("coverage")[0].at("temporal");
+				c.date.original = temporal.value("original", "");
+				c.date.formal = temporal.value("formal", "");
+			}
+			c.confidence = j.value("confidence", "");
+			c.notes = parseNotes(j);
+			citations.push_back(std::move(c));
+		}
+
+		return citations;
+	}
+
+	// Parsing one object at a time can't tell "#X" the source from "#X" the citation. Once the
+	// whole document is parsed, point references that name a citation at that citation.
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations) {
+		std::unordered_set<std::string> ids;
+		for (const auto& c : citations) ids.insert(c.id);
+		if (ids.empty()) return;
+
+		for (auto& p : persons) {
+			remapRefs(p.conclusion.sources, ids);
+			for (auto& f : p.facts) remapRefs(f.conclusion.sources, ids);
+		}
+		for (auto& r : relationships) {
+			remapRefs(r.conclusion.sources, ids);
+			for (auto& f : r.facts) remapRefs(f.conclusion.sources, ids);
+		}
+	}
+
 	// --- Serializers ---
 
 	nlohmann::json serializeConclusion(const gedcomx::Conclusion& conclusion) {
@@ -367,17 +473,7 @@ namespace gedcomx {
 			j["sources"] = sources;
 		}
 
-		if (!conclusion.notes.empty()) {
-			nlohmann::json notes = nlohmann::json::array();
-			for (const auto& note : conclusion.notes) {
-				nlohmann::json n;
-				if (!note.lang.empty()) n["lang"] = note.lang;
-				if (!note.subject.empty()) n["subject"] = note.subject;
-				n["text"] = note.text;
-				notes.push_back(n);
-			}
-			j["notes"] = notes;
-		}
+		if (!conclusion.notes.empty()) j["notes"] = serializeNotes(conclusion.notes);
 
 		return j;
 	}
@@ -492,10 +588,19 @@ namespace gedcomx {
 		return j;
 	}
 
-	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source, const std::vector<gedcomx::Person>& persons, const std::vector<gedcomx::Relationship>& relationships) {
+	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source,
+		const std::vector<gedcomx::Person>& persons,
+		const std::vector<gedcomx::Relationship>& relationships,
+		const std::vector<gedcomx::SourceDescription>& otherSources,
+		const std::vector<gedcomx::Citation>& citations) {
 		nlohmann::json doc;
 
 		doc["sourceDescriptions"] = nlohmann::json::array({ serializeSourceDescription(source) });
+		for (const auto& s : otherSources) doc["sourceDescriptions"].push_back(serializeSourceDescription(s));
+		for (const auto& c : citations) {
+			if (isBare(c)) continue;  // a bare citation is just "#S1" on the refeence; it has no description
+			doc["sourceDescriptions"].push_back(serializeCitation(c));
+		}
 
 		nlohmann::json personsJson = nlohmann::json::array();
 		for (const auto& p : persons) personsJson.push_back(serializePerson(p));
@@ -506,5 +611,30 @@ namespace gedcomx {
 		doc["relationships"] = relsJson;
 
 		return doc;
+	}
+
+	nlohmann::json serializeCitation(const Citation& c) {
+		nlohmann::json j;
+		j["id"] = c.id;
+		j["componentOf"]["description"] = "#" + c.sourceId;
+
+		if (!c.page.empty()) {
+			nlohmann::json citation;
+			citation["value"] = c.page;
+			j["citations"] = nlohmann::json::array({ citation });
+		}
+		if (!c.date.original.empty() || !c.date.formal.empty()) {
+			nlohmann::json temporal;
+			if (!c.date.original.empty()) temporal["original"] = c.date.original;
+			if (!c.date.formal.empty()) temporal["formal"] = c.date.formal;
+			nlohmann::json coverage;
+			coverage["temporal"] = temporal;
+			j["coverage"] = nlohmann::json::array({ coverage });
+		}
+
+		if (!c.confidence.empty()) j["confidence"] = c.confidence;  // not a GEDCOM X property; an app extension
+		if (!c.notes.empty()) j["notes"] = serializeNotes(c.notes);
+
+		return j;
 	}
 }
