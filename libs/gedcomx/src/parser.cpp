@@ -12,34 +12,6 @@ namespace {
 		return (!ref.empty() && ref[0] == '#') ? ref.substr(1) : ref;
 	}
 
-	std::vector<gedcomx::Note> parseNotes(const nlohmann::json& j) {
-		std::vector<gedcomx::Note> notes;
-		if (j.contains("notes")) {
-			for (const auto& noteJson : j.at("notes")) {
-				gedcomx::Note note;
-				note.lang = noteJson.value("lang", "");
-				note.subject = noteJson.value("subject", "");
-				note.text = noteJson.value("text", "");
-				notes.push_back(std::move(note));
-			}
-		}
-
-		return notes;
-	}
-
-	nlohmann::json serializeNotes(const std::vector<gedcomx::Note>& notes) {
-		nlohmann::json out = nlohmann::json::array();
-		for (const auto& note : notes) {
-			nlohmann::json n;
-			if (!note.lang.empty()) n["lang"] = note.lang;
-			if (!note.subject.empty()) n["subject"] = note.subject;
-			n["text"] = note.text;
-			out.push_back(n);
-		}
-
-		return out;
-	}
-
 	// component id -> id of the description it is a component of. Only counts parents that	are in the document.
 	std::unordered_map<std::string, std::string> componentParents(const nlohmann::json& document) {
 		std::unordered_set<std::string> ids;
@@ -76,6 +48,59 @@ namespace {
 				ref.citationId = *sourceId;
 		}
 	}
+
+	gedcomx::Address parseAddress(const nlohmann::json& a) {
+		gedcomx::Address addr;
+
+		addr.id = a.value("id", "");
+		addr.street = a.value("street", "");
+		addr.city = a.value("city", "");
+		addr.stateOrProvince = a.value("stateOrProvince", "");
+		addr.postalCode = a.value("postalCode", "");
+		addr.country = a.value("country", "");
+
+		return addr;
+	}
+
+	nlohmann::json serializeAddress(const gedcomx::Address& addr) {
+		nlohmann::json j;
+		if (!addr.id.empty()) j["id"] = addr.id;
+		if (!addr.street.empty()) j["street"] = addr.street;
+		if (!addr.city.empty()) j["city"] = addr.city;
+		if (!addr.stateOrProvince.empty()) j["stateOrProvince"] = addr.stateOrProvince;
+		if (!addr.postalCode.empty()) j["postalCode"] = addr.postalCode;
+		if (!addr.country.empty()) j["country"] = addr.country;
+
+		return j;
+	}
+
+	nlohmann::json serializeNotes(const std::vector<gedcomx::Note>& notes) {
+		nlohmann::json out = nlohmann::json::array();
+		for (const auto& note : notes) {
+			nlohmann::json n;
+			if (!note.lang.empty()) n["lang"] = note.lang;
+			if (!note.subject.empty()) n["subject"] = note.subject;
+			n["text"] = note.text;
+			out.push_back(n);
+		}
+
+		return out;
+	}
+
+	std::vector<gedcomx::Note> parseNotes(const nlohmann::json& j) {
+		std::vector<gedcomx::Note> notes;
+		if (j.contains("notes")) {
+			for (const auto& noteJson : j.at("notes")) {
+				gedcomx::Note note;
+				note.lang = noteJson.value("lang", "");
+				note.subject = noteJson.value("subject", "");
+				note.text = noteJson.value("text", "");
+				notes.push_back(std::move(note));
+			}
+		}
+
+		return notes;
+	}
 }
 
 namespace gedcomx {
@@ -86,6 +111,9 @@ namespace gedcomx {
 		if (j.contains("names")) {
 			for (const auto& nameJson : j.at("names")) {
 				Name name;
+				name.title = nameJson.value("title", "");
+				name.nickName = nameJson.value("nickName", "");
+				name.callName = nameJson.value("callName", "");
 
 				if (nameJson.contains("nameForms")) {
 					for (const auto& formJson : nameJson.at("nameForms")) {
@@ -112,6 +140,22 @@ namespace gedcomx {
 			for (const auto& factJson : j.at("facts")) {
 				person.facts.push_back(parseFact(factJson));
 			}
+		}
+
+		if (j.contains("gender")) {
+			const std::string type = j.at("gender").value("type", "");
+			if (!type.empty()) person.gender = Gender{ type };
+		}
+
+		if (j.contains("attributes")) {
+			for (const auto& a : j.at("attributes")) {
+				person.attributes.push_back({ a.value("id", ""), a.value("type", ""), a.value("value", "") });
+			}
+		}
+
+		if (j.contains("addresses")) {
+			for (const auto& a : j.at("addresses"))
+				person.addresses.push_back(parseAddress(a));
 		}
 
 		person.conclusion = parseConclusion(j);
@@ -272,15 +316,7 @@ namespace gedcomx {
 
 		if (j.contains("addresses")) {
 			for (const auto& a : j.at("addresses")) {
-				Address addr;
-
-				addr.street = a.value("street", "");
-				addr.city = a.value("city", "");
-				addr.stateOrProvince = a.value("stateOrProvidence", "");
-				addr.postalCode = a.value("postalCode", "");
-				addr.country = a.value("country", "");
-
-				agent.addresses.push_back(std::move(addr));
+				agent.addresses.push_back(parseAddress(a));
 			}
 		}
 
@@ -525,7 +561,12 @@ namespace gedcomx {
 					}
 					nameForms.push_back(formJson);
 				}
-				names.push_back({ {"nameForms", nameForms} });
+				nlohmann::json nameJson;
+				if (!name.title.empty()) nameJson["title"] = name.title;
+				if (!name.nickName.empty()) nameJson["nickName"] = name.nickName;
+				if (!name.callName.empty()) nameJson["callName"] = name.callName;
+				nameJson["nameForms"] = nameForms;
+				names.push_back(nameJson);
 			}
 			j["names"] = names;
 		}
@@ -536,6 +577,20 @@ namespace gedcomx {
 				facts.push_back(serializeFact(fact));
 			}
 			j["facts"] = facts;
+		}
+
+		if (person.gender && !person.gender->type.empty()) j["gender"]["type"] = person.gender->type;
+
+		if (!person.attributes.empty()) {
+			nlohmann::json attrs = nlohmann::json::array();
+			for (const auto& a : person.attributes) attrs.push_back({ { "id", a.id },{ "type", a.type },{ "value", a.value } });
+			j["attributes"] = attrs;
+		}
+
+		if (!person.addresses.empty()) {
+			nlohmann::json addrs = nlohmann::json::array();
+			for (const auto& a : person.addresses) addrs.push_back(serializeAddress(a));
+			j["addresses"] = addrs;
 		}
 
 		return j;

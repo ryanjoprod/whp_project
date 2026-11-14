@@ -44,6 +44,8 @@ namespace storage {
 	struct SourceExport {
 		std::vector<gedcomx::Person> persons;
 		std::vector<gedcomx::Relationship> relationships;
+		std::vector<gedcomx::SourceDescription> otherSources;  // other sources the export cites,so the files is self-contained
+		std::vector<gedcomx::Citation> citations;  // real citations only; bare ones are just "#S1" on a reference
 	};
 
 	class Database {
@@ -85,6 +87,7 @@ namespace storage {
 		std::vector<gedcomx::Citation> loadAllCitations();
 		// Creates the source's bare citation if it doesn't exist yet; returns its id. Safe to call repeatedly
 		std::string ensureBareCitation(const std::string& sourceId);
+		void importCitations(const gedcomx::Citation& citation);  // like save(), but refuses to take over another source's citation id
 
 		void save(const gedcomx::Agent& agent);
 		std::vector<gedcomx::Agent> loadAllAgents();

@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <map>
 #include <memory>
+#include <set>
 
 namespace storage {
 	class Database::Impl {
@@ -737,6 +738,8 @@ namespace storage {
 		}
 
 		SourceExport gatherSourceExport(const std::string& sourceId) {
+			std::set<std::string> citationIds;
+			std::set<std::string> otherSourceIds;
 			SourceExport result;
 
 			query("SELECT row_key FROM persons WHERE source_id = ?;", { sourceId },
@@ -754,7 +757,43 @@ namespace storage {
 					rel.person1Id = stripRowKeyPrefix(rel.person1Id, sourceId);
 					rel.person2Id = stripRowKeyPrefix(rel.person2Id, sourceId);
 					result.relationships.push_back(std::move(rel));
-				});
+			});
+
+			for (auto& c : loadCitationsForSource(sourceId)) {
+				if (gedcomx::isBare(c)) continue;
+				citationIds.insert(c.id);
+				result.citations.push_back(std::move(c));
+			}
+
+			auto noteRefs = [&](const std::vector<gedcomx::SourceReference>& refs) {
+				for (const auto& ref : refs) {
+					if (auto bareSource = gedcomx::bareCitationSourceId(ref.citationId)) {
+						if (*bareSource != sourceId) otherSourceIds.insert(*bareSource);
+					}
+					else if (citationIds.insert(ref.citationId).second) {  // not exported yet
+						if (auto c = loadCitation(ref.citationId)) {
+							if (c->sourceId != sourceId) otherSourceIds.insert(c->sourceId);
+							result.citations.push_back(std::move(*c));
+						}
+					}
+				}
+			};
+
+			for (const auto& p : result.persons) {
+				noteRefs(p.conclusion.sources);
+				for (const auto& f : p.facts) noteRefs(f.conclusion.sources);
+			}
+
+			for (const auto& r : result.relationships) {
+				noteRefs(r.conclusion.sources);
+				for (const auto& f : r.facts) noteRefs(f.conclusion.sources);
+			}
+
+			if (!otherSourceIds.empty()) {
+				for (auto& s : loadAllSourceDescriptions()) {
+					if (otherSourceIds.count(s.id)) result.otherSources.push_back(std::move(s));
+				}
+			}
 
 			return result;
 		}
@@ -1188,6 +1227,16 @@ namespace storage {
 
 	std::string Database::ensureBareCitation(const std::string& sourceId) {
 		return impl_->ensureBareCitation(sourceId);
+	}
+
+	void Database::importCitations(const gedcomx::Citation& citation) {
+		// Third-party files often use short ids like "C1". An id that already belongs to a different
+		// source would be silently taken over by an upsert, so refuse instead.
+		if (auto existing = loadCitation(citation.id); existing && existing->sourceId != citation.sourceId) {
+			throw std::runtime_error("Citation id '" + citation.id + "' already belongs to source '" + existing->sourceId
+				+ "'; this file uses it for source '" + citation.sourceId + "'.");
+		}
+		save(citation);
 	}
 
 	void Database::save(const gedcomx::Agent& agent) {
