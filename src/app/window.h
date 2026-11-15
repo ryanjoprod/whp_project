@@ -23,6 +23,12 @@
 #include "camera.h"
 #include "app_settings.h"
 
+struct EditableNote {
+	std::string lang;
+	std::string subject;  // kept as loaded; the UI only edits the text
+	char text[2048] = "";
+};
+
 class Window {
 public:
 	Window();
@@ -90,7 +96,9 @@ public:
 	void requestExportSaveDialog(const std::string& suggestedFileName);
 
 	// Modal window state
-	std::optional<gedcomx::SourceDescription> consumeNewSourceRequest();
+	void requestNewSourceEditor() { openSourceEditor(SourceEditorOwner::App, nullptr); }
+	void requestEditSourceEditor(const gedcomx::SourceDescription& source) { openSourceEditor(SourceEditorOwner::App, &source); }
+	std::optional<gedcomx::SourceDescription> consumeSourceSave();
 	// std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> consumeNewRelationshipRequest();
 	std::optional<std::string> consumeExportSourceRequest();
 	std::optional<std::string> consumeExportSavePath();
@@ -269,14 +277,23 @@ private:
 	ViewMode viewMode_ = ViewMode::AllSources;
 	std::string viewModeSourceId_;
 
-	// Modal window stuff 
-	// void renderNewSourceModal();
-	// void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
-
 	// Source Modal state
 	std::string pendingAutoSelectSourceId_;
-	char newSourceTitleBuffer_[256] = "";
-	std::optional<gedcomx::SourceDescription> newSourceResult_;
+	std::optional<gedcomx::SourceDescription> sourceSaveResult_;
+
+	enum class SourceEditorOwner { None, App, PersonEditor };
+
+	SourceEditorOwner sourceEditorOwner_ = SourceEditorOwner::None;
+	bool showSourceEditor_ = false;
+	gedcomx::SourceDescription workingSource_;  // empty id = a new source
+	char sourceTitleBuffer_[256] = "";
+	char sourceAuthorBuffer_[256] = "";
+	char sourcePubInfoBuffer_[512] = "";
+	char sourceAbbrevBuffer_[64] = "";
+	std::vector<EditableNote> sourceNotes_;
+
+	void openSourceEditor(SourceEditorOwner owner, const gedcomx::SourceDescription* existing);
+	void renderSourceEditor(SourceEditorOwner owner);
 
 	// Person Modal state
 	bool showPersonEditor_ = false;
@@ -313,11 +330,6 @@ private:
 	// --- Citation Editor (one popup, shared by the Person and Relationship editors) ---
 	enum class CitationEditorOwner { None, Person, Relationship };
 
-	struct EditableCitationNote {
-		std::string lang, subject;  // kept as loaded; the UI only edits the text
-		char text[2048] = "";
-	};
-
 	std::vector<gedcomx::Citation> knownCitations_;  // pushed by App; includes bare citations
 	std::string lastCitedSourceId_;  // preselected the next time the editor opens
 	CitationEditorOwner citationEditorOwner_ = CitationEditorOwner::None;
@@ -329,7 +341,7 @@ private:
 	gedcomx::Citation workingCitation_;  // empty id = a new citation
 	char citationPageBuffer_[256] = "";
 	char citationDateBuffer_[128] = "";
-	std::vector<EditableCitationNote> citationNotes_;
+	std::vector<EditableNote> citationNotes_;
 	std::optional<gedcomx::Citation> citationSaveResults_;
 
 	void renderCitationRefs(CitationEditorOwner owner,
@@ -337,7 +349,9 @@ private:
 		const std::vector<gedcomx::SourceDescription>& knownSources);
 	void openCitationEditor(CitationEditorOwner owner, const gedcomx::Citation* existing);
 	void renderCitationEditor(CitationEditorOwner owner, const std::vector<gedcomx::SourceDescription>& knownSources);
-	void renderCitationEditorNotesTab();
+	void renderEditableNotes(std::vector<EditableNote>& notes);
+	static void fillEditableNotes(std::vector<EditableNote>& out, const std::vector<gedcomx::Note>& notes);
+	static std::vector<gedcomx::Note> collectNotes(const std::vector<EditableNote>& notes);
 	void fillCitationForm(const gedcomx::Citation& c);
 	void startNewCitationForm();
 	std::vector<gedcomx::SourceReference>& citationTargetRefs();

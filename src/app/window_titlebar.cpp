@@ -23,8 +23,19 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
             }
             ImGui::Separator();
             ImGui::BeginDisabled(!projectOpen_);
+            if (ImGui::MenuItem("New Source...")) {
+                requestNewSourceEditor();
+            }
             if (ImGui::MenuItem("Open Source File...")) {
                 requestOpenFileDialog();
+            }
+            if (ImGui::BeginMenu("Edit Source")) {
+                for (const auto& source : knownSources) {
+                    const std::string label = source.primaryTitle() + "##edit" + source.id;
+                    if (ImGui::MenuItem(label.c_str()))
+                        requestEditSourceEditor(source);
+                }
+                ImGui::EndMenu();
             }
             if (ImGui::MenuItem("Export Source...")) {
                 requestExportModal();

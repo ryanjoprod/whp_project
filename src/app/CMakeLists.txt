@@ -10,6 +10,7 @@ add_executable(app
 	window_dialogs.cpp
 	window_person_editor.cpp
 	window_relationship_editor.cpp
+	window_sources.cpp
 	camera.cpp
 	project.cpp
 	logger.cpp

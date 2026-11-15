@@ -587,16 +587,16 @@ void App::run() {
 			}
 		}
 
-		if (auto newSource = window_.consumeNewSourceRequest()) {
+		if (auto source = window_.consumeSourceSave()) {
 			try {
 				db_->runInTransaction([&] {
-					db_->save(*newSource);
-					db_->ensureBareCitation(newSource->id);
+					db_->save(*source);
+					db_->ensureBareCitation(source->id);  // does nothing if it already exists
 				});
-				knownSources_.push_back(*newSource);
+				knownSources_ = db_->loadAllSourceDescriptions();
 			}
 			catch (const std::exception& e) {
-				Logger::log(LogLevel::Error, std::string("Failed to create source: ") + e.what());
+				Logger::log(LogLevel::Error, std::string("Failed to save source: ") + e.what());
 			}
 		}
 

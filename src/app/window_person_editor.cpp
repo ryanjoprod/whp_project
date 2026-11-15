@@ -145,29 +145,19 @@ void Window::renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescrip
 		ImGui::EndCombo();
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("+ New Source")) {
-		ImGui::OpenPopup("New Source");
-	}
+	if (ImGui::Button("+ New Source"))
+		openSourceEditor(SourceEditorOwner::PersonEditor, nullptr);
 	ImGui::EndDisabled();
 
-	if (ImGui::BeginPopupModal("New Source", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::InputText("Title", newSourceTitleBuffer_, sizeof(newSourceTitleBuffer_));
-		bool titleEmpty = newSourceTitleBuffer_[0] == '\0';
-		ImGui::BeginDisabled(titleEmpty);
-		if (ImGui::Button("Create Source")) {
-			gedcomx::SourceDescription src;
-			src.id = idgen::generateLocalId("S_");
-			src.titles.push_back({ "", newSourceTitleBuffer_ });
-			newSourceResult_ = src;
-			pendingAutoSelectSourceId_ = src.id;
-			newSourceTitleBuffer_[0] = '\0';
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-		ImGui::EndPopup();
-	}
+	// Editing the selected source stays available even when the picker above is locked
+	ImGui::SameLine();
+	const bool haveSource = selectedSourceIndex_ >= 0 && selectedSourceIndex_ < (int)knownSources.size();
+	ImGui::BeginDisabled(!haveSource);
+	if (ImGui::Button("Edit Source"))
+		openSourceEditor(SourceEditorOwner::PersonEditor, &knownSources[selectedSourceIndex_]);
+	ImGui::EndDisabled();
+
+	renderSourceEditor(SourceEditorOwner::PersonEditor);  // renders inside this popup, like the Citation Editor
 
 	if (!pendingAutoSelectSourceId_.empty()) {
 		for (int i = 0; i < (int)knownSources.size(); ++i) {
