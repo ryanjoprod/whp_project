@@ -2,7 +2,7 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 7;
+	constexpr int kSchemaVersion = 8;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
@@ -37,6 +37,9 @@ namespace storage {
 			page TEXT,
 			date_original TEXT,
 			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
 			confidence TEXT,
 			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
@@ -50,7 +53,7 @@ namespace storage {
 			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE CASCADE
 		);
 
-		CREATE TABLE IF NOT EXISTS citation_atributes (
+		CREATE TABLE IF NOT EXISTS citation_attributes (
 			row_key TEXT PRIMARY KEY,
 			citation_id TEXT NOT NULL,
 			type TEXT,
@@ -92,6 +95,9 @@ namespace storage {
 			type TEXT,
 			date_original TEXT,
 			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
 			place_original TEXT,	
 			place_description_id TEXT,
 			value TEXT,
@@ -204,6 +210,9 @@ namespace storage {
 			type TEXT,
 			date_original TEXT,
 			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
 			place_original TEXT,
 			place_description_id TEXT,
 			value TEXT,
@@ -268,24 +277,31 @@ namespace storage {
 
 		CREATE TABLE IF NOT EXISTS events (
 			row_key TEXT PRIMARY KEY,
-			local_id TEXT,
+			local_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
 			type TEXT,
 			date_original TEXT,
 			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
 			place_original TEXT,
+			place_description_id TEXT,
 			confidence TEXT,
-			lang TEXT
+			lang TEXT,
+			FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS event_roles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			event_id TEXT NOT NULL,
 			type TEXT,
-			person_id TEXT,
+			person_id TEXT NOT NULL,
 			details TEXT,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE
+			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS event_notes (
@@ -330,15 +346,19 @@ namespace storage {
 			type TEXT,
 			latitude TEXT,
 			longitude TEXT,
-			jurisdiction_id TEXT,
+			code TEXT,
 			confidence TEXT,
-			lang TEXT,
-			FOREIGN KEY (jurisdiction_id) REFERENCES places(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED
+			lang TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS place_names (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			place_id TEXT NOT NULL,
+			date_original TEXT,
+			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
 			lang TEXT,
 			value TEXT,
 			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
@@ -352,5 +372,17 @@ namespace storage {
 			text TEXT,
 			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
 		);
+
+		CREATE TABLE IF NOT EXISTS place_jurisdictions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			place_id TEXT NOT NULL,
+			parent_id TEXT NOT NULL,
+			date_original TEXT,
+			date_formal TEXT,
+			date_calendar TEXT,
+			date_quality TEXT,
+			date_sort INTEGER,
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFFERED,
+			FOREIGN KEY (parent_id) REFERENCES places(id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
 	)";
 }
