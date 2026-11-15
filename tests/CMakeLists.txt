@@ -14,6 +14,7 @@ add_executable(whp_tests
 	storage/test_relationship_storage.cpp
 	storage/test_places_storage.cpp
 	storage/test_citation_storage.cpp
+	storage/test_event_storage.cpp
 )
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

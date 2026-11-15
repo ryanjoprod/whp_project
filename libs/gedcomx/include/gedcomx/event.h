@@ -21,5 +21,7 @@ namespace gedcomx {
 		PlaceReference place;
 		std::vector<EventRole> roles;
 		Conclusion conclusion;
+		std::string description;
+		std::string sourceId;  // filled in when loaded from the database
 	};
 }

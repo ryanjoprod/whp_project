@@ -92,8 +92,9 @@ namespace storage {
 		void save(const gedcomx::Agent& agent);
 		std::vector<gedcomx::Agent> loadAllAgents();
 
-		void save(const gedcomx::Event& event);
+		void save(const gedcomx::Event& event, const std::string& sourceId);
 		std::vector<gedcomx::Event> loadAllEvents();
+		std::vector<gedcomx::Event> loadEventsForSource(const std::string& sourceId);
 
 		void save(const gedcomx::Document& document);
 		std::vector<gedcomx::Document> loadAllDocuments();

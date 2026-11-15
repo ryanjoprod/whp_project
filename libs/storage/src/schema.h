@@ -287,9 +287,18 @@ namespace storage {
 			date_sort INTEGER,
 			place_original TEXT,
 			place_description_id TEXT,
+			description TEXT,
 			confidence TEXT,
 			lang TEXT,
-			FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE RESTRICT
+			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
+		);
+
+		CREATE TABLE IF NOT EXISTS event_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS event_roles (
@@ -301,7 +310,15 @@ namespace storage {
 			confidence TEXT,
 			lang TEXT,
 			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE RESTRICT
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS event_role_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_role_id INTEGER NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (event_role_id) REFERENCES event_roles(id) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS event_notes (
@@ -319,6 +336,22 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
+			FOREIGN KEY (event_role_id) REFERENCES event_roles(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS event_attributes (
+			row_key TEXT PRIMARY KEY,
+			event_id TEXT NOT NULL,
+			type TEXT,
+			value TEXT,
+			FOREIGN KEY (event_id) REFERENCES events(row_key) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS event_role_attributes (
+			row_key TEXT PRIMARY KEY,
+			event_role_id INTEGER NOT NULL,
+			type TEXT,
+			value TEXT,
 			FOREIGN KEY (event_role_id) REFERENCES event_roles(id) ON DELETE CASCADE
 		);
 

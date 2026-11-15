@@ -98,12 +98,12 @@ namespace storage {
 						bindDate(s, 10, fact.date);
 					});
 
-				saveCitationsRefs("person_fact_citations", "person_fact_id", factKey, fact.conclusion.sources);
+				saveCitationRefs("person_fact_citations", "person_fact_id", factKey, fact.conclusion.sources);
 				saveNotesFor("person_fact_notes", "person_fact_id", factKey, fact.conclusion.notes);
 			}
 
 			saveNotesFor("person_notes", "person_id", key, person.conclusion.notes);
-			saveCitationsRefs("person_citations", "person_id", key, person.conclusion.sources);
+			saveCitationRefs("person_citations", "person_id", key, person.conclusion.sources);
 			saveAddressesFor(key, person.addresses);
 			saveAttributesFor(key, person.attributes);
 
@@ -259,7 +259,7 @@ namespace storage {
 					bindText(s, 8, rel.conclusion.lang);
 				});
 
-			saveCitationsRefs("relationship_citations", "relationship_id", relKey, rel.conclusion.sources);
+			saveCitationRefs("relationship_citations", "relationship_id", relKey, rel.conclusion.sources);
 
 			exec("DELETE FROM relationship_facts WHERE relationship_id = ?;", { relKey });
 
@@ -281,7 +281,7 @@ namespace storage {
 						bindDate(s, 10, fact.date);
 					});
 
-				saveCitationsRefs("relationship_fact_citations", "relationship_fact_id", factKey, fact.conclusion.sources);
+				saveCitationRefs("relationship_fact_citations", "relationship_fact_id", factKey, fact.conclusion.sources);
 				saveNotesFor("relationship_fact_notes", "relationship_fact_id", factKey, fact.conclusion.notes);
 			}
 
@@ -523,31 +523,35 @@ namespace storage {
 				return results;
 		}
 
-		void save(const gedcomx::Event& event) {
-			upsert("INSERT INTO events (row_key, local_id, type, date_original, date_formal, place_original, confidence, lang) "
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+		void save(const gedcomx::Event& event, const std::string& sourceId) {
+			Transaction tx(*this);
+			const std::string key = rowKey(sourceId, event.id);
+
+			upsert(std::string("INSERT INTO events (row_key, local_id, source_id, type, place_original, place_description_id, description, confidence, lang, ") + kDateColumns + ") "
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, " + kDatePlaceholders + ") "
 				"ON CONFLICT(row_key) "
-				"DO UPDATE SET local_id = excluded.local_id, type = excluded.type, date_original = excluded.date_original, date_formal = excluded.date_formal, "
-				"place_original = excluded.place_original, confidence = excluded.confidence, lang = excluded.lang;",
+				"DO UPDATE SET local_id = excluded.local_id, source_id = excluded.source_id, type = excluded.type, place_original = excluded.place_original, place_description_id = excluded.place_description_id, description = excluded.description, confidence = excluded.confidence, lang = excluded.lang, " + kDateUpdateSet + ";",
 				[&](sqlite3_stmt* s) {
-					bindText(s, 1, event.id);
+					bindText(s, 1, key);
 					bindText(s, 2, event.id);
-					bindText(s, 3, event.type);
-					bindText(s, 4, event.date.original);
-					bindText(s, 5, event.date.formal);
-					bindText(s, 6, event.place.original);
-					bindText(s, 7, event.conclusion.confidence);
-					bindText(s, 8, event.conclusion.lang);
+					bindText(s, 3, sourceId);
+					bindText(s, 4, event.type);
+					bindText(s, 5, event.place.original);
+					bindText(s, 6, event.place.descriptionId);
+					bindText(s, 7, event.description);
+					bindText(s, 8, event.conclusion.confidence);
+					bindText(s, 9, event.conclusion.lang);
+					bindDate(s, 10, event.date);
 				});
 
-			exec("DELETE FROM event_roles WHERE event_id = ?;", { event.id });
+			exec("DELETE FROM event_roles WHERE event_id = ?;", { key });  // cascades to role notes and citations
 			for (const auto& role : event.roles) {
 				long long roleRowId = insertReturningId(
 					"INSERT INTO event_roles (event_id, type, person_id, details, confidence, lang) VALUES (?, ?, ?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
-						bindText(s, 1, event.id);
+						bindText(s, 1, key);
 						bindText(s, 2, role.type);
-						bindText(s, 3, role.personId);
+						bindText(s, 3, rowKey(sourceId, role.personId));
 						bindText(s, 4, role.details);
 						bindText(s, 5, role.conclusion.confidence);
 						bindText(s, 6, role.conclusion.lang);
@@ -562,42 +566,63 @@ namespace storage {
 							bindText(s, 4, note.text);
 						});
 				}
+
+				saveCitationRefs("event_role_citations", "event_role_id", std::to_string(roleRowId), role.conclusion.sources);
 			}
 
-			saveNotesFor("event_notes", "event_id", event.id, event.conclusion.notes);
+			saveNotesFor("event_notes", "event_id", key, event.conclusion.notes);
+			saveCitationRefs("event_citations", "event_id", key, event.conclusion.sources);
+			tx.commit();
+		}
+
+		gedcomx::Event loadEventRow(sqlite3_stmt* s) {
+			gedcomx::Event event;
+			const std::string key = columnText(s, 0);
+			event.id = key;  // the row key, like Person
+			event.sourceId = columnText(s, 2);
+			event.type = columnText(s, 3);
+			event.place.original = columnText(s, 4);
+			event.place.descriptionId = columnText(s, 5);
+			event.description = columnText(s, 6);
+			event.conclusion.confidence = columnText(s, 7);
+			event.conclusion.lang = columnText(s, 8);
+			event.date = readDate(s, 9);
+			event.conclusion.notes = loadNotesFor("event_notes", "event_id", key);
+			event.conclusion.sources = loadCitationRefsFor("event_citations", "event_id", key);
+
+			query("SELECT id, type, person_id, details, confidence, lang FROM event_roles WHERE event_id = ? ORDER BY id;", { key },
+				[&](sqlite3_stmt* rs) {
+					gedcomx::EventRole role;
+					long long roleRowId = sqlite3_column_int64(rs, 0);
+					role.type = columnText(rs, 1);
+					role.personId = columnText(rs, 2);  // the person's row key
+					role.details = columnText(rs, 3);
+					role.conclusion.confidence = columnText(rs, 4);
+					role.conclusion.lang = columnText(rs, 5);
+					role.conclusion.notes = loadNotesFor("event_role_notes", "event_role_id", std::to_string(roleRowId));
+					role.conclusion.sources = loadCitationRefsFor("event_role_citations", "event_role_id", std::to_string(roleRowId));
+					event.roles.push_back(std::move(role));
+				});
+			return event;
 		}
 
 		std::vector<gedcomx::Event> loadAllEvents() {
-			std::vector<gedcomx::Event> results;
-
-			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, confidence, lang FROM events;", {},
+			std::vector<gedcomx::Event>	results;
+			query(std::string("SELECT row_key, local_id, source_id, type, place_original, place_description_id, description, confidence, lang, ") + kDateColumns + " FROM events ORDER BY row_key;",
+				{},
 				[&](sqlite3_stmt* s) {
-					gedcomx::Event event;
-					event.id = columnText(s, 1);
-					event.type = columnText(s, 2);
-					event.date.original = columnText(s, 3);
-					event.date.formal = columnText(s, 4);
-					event.place.original = columnText(s, 5);
-					event.conclusion.confidence = columnText(s, 6);
-					event.conclusion.lang = columnText(s, 7);
-					event.conclusion.notes = loadNotesFor("event_notes", "event_id", event.id);
-
-					query("SELECT id, type, person_id, details, confidence, lang FROM event_roles WHERE event_id = ?;", { event.id },
-						[&](sqlite3_stmt* rs) {
-							gedcomx::EventRole role;
-							long long roleRowId = sqlite3_column_int64(rs, 0);
-							role.type = columnText(rs, 1);
-							role.personId = columnText(rs, 2);
-							role.details = columnText(rs, 3);
-							role.conclusion.confidence = columnText(rs, 4);
-							role.conclusion.lang = columnText(rs, 5);
-							role.conclusion.notes = loadNotesFor("event_role_notes", "event_role_id", std::to_string(roleRowId));
-							event.roles.push_back(std::move(role));
-						});
-
-					results.push_back(std::move(event));
+					results.push_back(loadEventRow(s));
 				});
+			return results;
+		}
 
+		std::vector<gedcomx::Event> loadEventsForSource(const std::string& sourceId) {
+			std::vector<gedcomx::Event> results;
+			query(std::string("SELECT row_key, local_id, source_id, type, place_original, place_description_id, description, confidence, lang, ") + kDateColumns + " FROM events WHERE source_id = ? ORDER BY row_key;",
+				{ sourceId },
+				[&](sqlite3_stmt* s) {
+					results.push_back(loadEventRow(s));
+				});
 			return results;
 		}
 
@@ -1121,7 +1146,7 @@ namespace storage {
 			return deleted;
 		}
 
-		void saveCitationsRefs(const std::string& table, const std::string& fkColumn, const std::string& ownerKey, const std::vector<gedcomx::SourceReference>& refs) {
+		void saveCitationRefs(const std::string& table, const std::string& fkColumn, const std::string& ownerKey, const std::vector<gedcomx::SourceReference>& refs) {
 			exec("DELETE FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey });
 			for (const auto& ref : refs) {
 				upsert("INSERT INTO " + table + " (" + fkColumn + ", citation_id) VALUES (?, ?);",
@@ -1279,12 +1304,16 @@ namespace storage {
 		return impl_->loadAllAgents();
 	}
 
-	void Database::save(const gedcomx::Event& event) {
-		impl_->save(event);
+	void Database::save(const gedcomx::Event& event, const std::string& sourceId) {
+		impl_->save(event, sourceId);
 	}
 
 	std::vector<gedcomx::Event> Database::loadAllEvents() {
 		return impl_->loadAllEvents();
+	}
+
+	std::vector<gedcomx::Event> Database::loadEventsForSource(const std::string& sourceId) {
+		return impl_->loadEventsForSource(sourceId);
 	}
 	
 	void Database::save(const gedcomx::Document& document) {

@@ -253,7 +253,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 			for (const auto& p : people) db_->save(p, sourceId);
 			for (const auto& r : relationships) db_->save(r, sourceId);
 			for (const auto& a : agents) db_->save(a);
-			for (const auto& e : events) db_->save(e);
+			for (const auto& e : events) db_->save(e, sourceId);
 			for (const auto& d : documents) db_->save(d);
 		});
 		refreshKnownCitations();  // the Windows needs the new citations for labels, Edit and reuse list
