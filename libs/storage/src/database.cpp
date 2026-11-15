@@ -84,19 +84,18 @@ namespace storage {
 				const auto& fact = person.facts[i];
 				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
 				std::string factKey = rowKey(key, localId);
-				upsert("INSERT INTO person_facts (row_key, local_id, person_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+				upsert(std::string("INSERT INTO person_facts (row_key, local_id, person_id, type, place_original, place_description_id, value, confidence, lang, ") + kDateColumns + ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, " + kDatePlaceholders + ");",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
 						bindText(s, 2, localId);
 						bindText(s, 3, key);
 						bindText(s, 4, fact.type);
-						bindText(s, 5, fact.date.original);
-						bindText(s, 6, fact.date.formal);
-						bindText(s, 7, fact.place.original);
-						bindText(s, 8, fact.place.descriptionId);
-						bindText(s, 9, fact.value);
-						bindText(s, 10, fact.conclusion.confidence);
-						bindText(s, 11, fact.conclusion.lang);
+						bindText(s, 5, fact.place.original);
+						bindText(s, 6, fact.place.descriptionId);
+						bindText(s, 7, fact.value);
+						bindText(s, 8, fact.conclusion.confidence);
+						bindText(s, 9, fact.conclusion.lang);
+						bindDate(s, 10, fact.date);
 					});
 
 				saveCitationsRefs("person_fact_citations", "person_fact_id", factKey, fact.conclusion.sources);
@@ -268,19 +267,18 @@ namespace storage {
 				const auto& fact = rel.facts[i];
 				const std::string localId = fact.id.empty() ? "f" + std::to_string(i) : fact.id;
 				std::string factKey = rowKey(relKey, localId);
-				upsert("INSERT INTO relationship_facts (row_key, local_id, relationship_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+				upsert(std::string("INSERT INTO relationship_facts (row_key, local_id, relationship_id, type, place_original, place_description_id, value, confidence, lang, ") + kDateColumns + ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, " + kDatePlaceholders + ");",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, factKey);
 						bindText(s, 2, localId);
 						bindText(s, 3, relKey);
 						bindText(s, 4, fact.type);
-						bindText(s, 5, fact.date.original);
-						bindText(s, 6, fact.date.formal);
-						bindText(s, 7, fact.place.original);
-						bindText(s, 8, fact.place.descriptionId);
-						bindText(s, 9, fact.value);
-						bindText(s, 10, fact.conclusion.confidence);
-						bindText(s, 11, fact.conclusion.lang);
+						bindText(s, 5, fact.place.original);
+						bindText(s, 6, fact.place.descriptionId);
+						bindText(s, 7, fact.value);
+						bindText(s, 8, fact.conclusion.confidence);
+						bindText(s, 9, fact.conclusion.lang);
+						bindDate(s, 10, fact.date);
 					});
 
 				saveCitationsRefs("relationship_fact_citations", "relationship_fact_id", factKey, fact.conclusion.sources);
@@ -371,17 +369,15 @@ namespace storage {
 
 		void save(const gedcomx::Citation& c) {
 			Transaction tx(*this);
-			upsert("INSERT INTO citations (id, source_id, page, date_original, date_formal, confidence) VALUES (?, ?, ?, ?, ?, ?) "
+			upsert(std::string("INSERT INTO citations (id, source_id, page, confidence, ") + kDateColumns + ") VALUES (?, ?, ?, ?, " + kDatePlaceholders + ")"
 				"ON CONFLICT(id) "
-				"DO UPDATE SET source_id = excluded.source_id, page = excluded.page, date_original = excluded.date_original, "
-				"date_formal = excluded.date_formal, confidence = excluded.confidence;",
+				"DO UPDATE SET source_id = excluded.source_id, page = excluded.page, confidence = excluded.confidence, " + kDateUpdateSet,
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, c.id);
 					bindText(s, 2, c.sourceId);
 					bindText(s, 3, c.page);
-					bindText(s, 4, c.date.original);
-					bindText(s, 5, c.date.formal);
-					bindText(s, 6, c.confidence);
+					bindText(s, 4, c.confidence);
+					bindDate(s, 5, c.date);
 				});
 			saveNotesFor("citation_notes", "citation_id", c.id, c.notes);
 			tx.commit();
@@ -392,16 +388,15 @@ namespace storage {
 			c.id = columnText(s, 0);
 			c.sourceId = columnText(s, 1);
 			c.page = columnText(s, 2);
-			c.date.original = columnText(s, 3);
-			c.date.formal = columnText(s, 4);
-			c.confidence = columnText(s, 5);
+			c.confidence = columnText(s, 3);
+			c.date = readDate(s, 4);
 			c.notes = loadNotesFor("citation_notes", "citation_id", c.id);
 			return c;
 		}
 
 		std::optional<gedcomx::Citation> loadCitation(const std::string& id) {
 			std::optional<gedcomx::Citation> result;
-			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations WHERE id = ?;",
+			query(std::string("SELECT id, source_id, page, confidence, ") + kDateColumns + " FROM citations WHERE id = ? ; ",
 				{ id },
 				[&](sqlite3_stmt* s) {
 					result = loadCitationRow(s);
@@ -411,7 +406,7 @@ namespace storage {
 
 		std::vector<gedcomx::Citation> loadCitationsForSource(const std::string& sourceId) {
 			std::vector<gedcomx::Citation> results;
-			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations WHERE source_id = ? ORDER BY id;",
+			query(std::string("SELECT id, source_id, page, confidence, ") + kDateColumns + " FROM citations WHERE source_id = ? ORDER BY id; ",
 				{ sourceId },
 				[&](sqlite3_stmt* s) {
 					results.push_back(loadCitationRow(s));
@@ -421,7 +416,7 @@ namespace storage {
 
 		std::vector<gedcomx::Citation> loadAllCitations() {
 			std::vector<gedcomx::Citation> results;
-			query("SELECT id, source_id, page, date_original, date_formal, confidence FROM citations ORDER BY source_id, id;",
+			query(std::string("SELECT id, source_id, page, confidence, ") + kDateColumns + " FROM citations ORDER BY source_id, id; ",
 				{},
 				[&](sqlite3_stmt* s) {
 					results.push_back(loadCitationRow(s));
@@ -979,19 +974,18 @@ namespace storage {
 
 		std::vector<gedcomx::Fact> loadFacts(const std::string& table, const std::string& notesTable, const std::string& sourcesTable, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::Fact> facts;
-			query("SELECT row_key, local_id, type, date_original, date_formal, place_original, place_description_id, value, confidence, lang FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
+			query(std::string("SELECT row_key, local_id, type, place_original, place_description_id, value, confidence, lang, ") + kDateColumns + " FROM " + table + " WHERE " + fkColumn + " = ? ; ", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Fact fact;
 					std::string factKey = columnText(s, 0);
 					fact.id = columnText(s, 1);
 					fact.type = columnText(s, 2);
-					fact.date.original = columnText(s, 3);
-					fact.date.formal = columnText(s, 4);
-					fact.place.original = columnText(s, 5);
-					fact.place.descriptionId = columnText(s, 6);
-					fact.value = columnText(s, 7);
-					fact.conclusion.confidence = columnText(s, 8);
-					fact.conclusion.lang = columnText(s, 9);
+					fact.place.original = columnText(s, 3);
+					fact.place.descriptionId = columnText(s, 4);
+					fact.value = columnText(s, 5);
+					fact.conclusion.confidence = columnText(s, 6);
+					fact.conclusion.lang = columnText(s, 7);
+					fact.date = readDate(s, 8);
 
 					std::string notesFk = (notesTable == "person_fact_notes") ? "person_fact_id" : "relationship_fact_id";
 					fact.conclusion.notes = loadNotesFor(notesTable, notesFk, factKey);
@@ -1146,6 +1140,33 @@ namespace storage {
 				});
 
 			return refs;
+		}
+
+		// --- date helpers ---
+
+		static constexpr const char* kDateColumns = "date_original, date_formal, date_calendar, date_quality, date_sort";
+		static constexpr const char* kDatePlaceholders = "?, ?, ?, ?, ?";
+		static constexpr const char* kDateUpdateSet = "date_original = excluded.date_original, date_formal = excluded.date_formal, date_calendar = excluded.date_calendar, date_quality = excluded.date_quality, date_sort = excluded.date_sort";
+
+		void bindDate(sqlite3_stmt* s, int first, const gedcomx::Date& d) {  // first is 1-based
+			bindText(s, first, d.original);
+			bindText(s, first + 1, d.formal);
+			bindText(s, first + 2, d.calendar);
+			bindText(s, first + 3, d.quality);
+			if (d.sortValue) sqlite3_bind_int64(s, first + 4, *d.sortValue);
+			else sqlite3_bind_null(s, first + 4);
+		}
+
+		gedcomx::Date readDate(sqlite3_stmt* s, int first) {  // first is 0-based
+			gedcomx::Date d;
+			d.original = columnText(s, first);
+			d.formal = columnText(s, first + 1);
+			d.calendar = columnText(s, first + 2);
+			d.quality = columnText(s, first + 3);
+			if (sqlite3_column_type(s, first + 4) != SQLITE_NULL)
+				d.sortValue = sqlite3_column_int64(s, first + 4);
+
+			return d;
 		}
 	};
 

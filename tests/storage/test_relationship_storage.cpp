@@ -488,3 +488,35 @@ TEST_CASE("A new child is not created if the family save fails") {
 	CHECK_FALSE(db.loadPerson("S1:P3").has_value());  // the child went with it
 	CHECK(db.loadRelationshipsForPerson("S1:P1").empty());
 }
+
+TEST_CASE("A realtionship fact's calendar, quality and sort value round-trip") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person p1;
+	p1.id = "P1";
+	gedcomx::Person p2;
+	p2.id = "P2";
+	db.save(p1, "S1");
+	db.save(p2, "S1");
+
+	gedcomx::Relationship rel;
+	rel.id = "R1";
+	rel.type = "http://gedcomx.org/Couple";
+	rel.person1Id = "P1";
+	rel.person2Id = "P2";
+
+	gedcomx::Fact marriage;
+	marriage.id = "F1";
+	marriage.type = "http://gedcomx.org/Marriage";
+	marriage.place.original = "Jerusalem";
+	marriage.date = testutil::makeHebrewDate();
+	rel.facts.push_back(marriage);
+	db.save(rel, "S1");
+	
+	auto loaded = db.loadRelationshipsForPerson("S1:P1");
+	REQUIRE(loaded.size() == 1);
+	REQUIRE(loaded[0].facts.size() == 1);
+	testutil::checkHebrewDate(loaded[0].facts[0].date);
+	CHECK(loaded[0].facts[0].place.original == "Jerusalem");
+}

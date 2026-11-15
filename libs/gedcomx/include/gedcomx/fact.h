@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 #include "gedcomx/conclusion.h"
 
@@ -8,6 +9,9 @@ namespace gedcomx {
 	struct Date {
 		std::string original;  // human-readable, e.g. "9 April 2001"
 		std::string formal;  // GEDCOM X formal date format, e.g. "+2001-04-09"
+		std::string calendar;  // "" = Gregorian
+		std::string quality;  // "" = none, "estimated", "calculated"
+		std::optional<long long> sortValue;  // Julian day number, nullopt = unknown
 	};
 
 	struct PlaceReference {

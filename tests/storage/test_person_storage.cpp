@@ -355,3 +355,38 @@ TEST_CASE("A person citing a citation that does not exist is rejected, person an
 	CHECK_THROWS_AS(db.save(p, "S1"), std::runtime_error);
 	CHECK_FALSE(db.loadPerson("S1:P1").has_value());
 }
+
+TEST_CASE("A person fact's calendar, quality and sort value round-trip") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+
+	gedcomx::Person person;
+	person.id = "P1";
+
+	gedcomx::Fact fact;
+	fact.id = "F1";
+	fact.type = "http://gedcomx.org/Birth";
+	fact.place.original = "Jerusalem";
+	fact.value = "a value";
+	fact.conclusion.confidence = "http://gedcomx.org/High";
+	fact.date = testutil::makeHebrewDate();
+	person.facts.push_back(fact);
+
+	gedcomx::Fact plain;  // a fact with no date at all
+	plain.id = "F2";
+	plain.type = "http://gedcomx.org/Death";
+	person.facts.push_back(plain);
+	db.save(person, "S1");
+
+	auto loaded = db.loadPerson("S1:P1");
+	REQUIRE(loaded.has_value());
+	REQUIRE(loaded->facts.size() == 2);
+
+	testutil::checkHebrewDate(loaded->facts[0].date);
+	CHECK(loaded->facts[0].place.original == "Jerusalem");  // columns around the date still line up
+	CHECK(loaded->facts[0].value == "a value");
+	CHECK(loaded->facts[0].conclusion.confidence == "http://gedcomx.org/High");
+
+	CHECK(loaded->facts[1].date.calendar == "");
+	CHECK_FALSE(loaded->facts[1].date.sortValue.has_value());
+}

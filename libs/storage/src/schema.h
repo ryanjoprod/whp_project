@@ -382,7 +382,8 @@ namespace storage {
 			date_calendar TEXT,
 			date_quality TEXT,
 			date_sort INTEGER,
-			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFFERED,
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
 			FOREIGN KEY (parent_id) REFERENCES places(id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
+		);
 	)";
 }
