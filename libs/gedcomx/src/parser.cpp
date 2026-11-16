@@ -503,7 +503,7 @@ namespace gedcomx {
 
 	// Parsing one object at a time can't tell "#X" the source from "#X" the citation. Once the
 	// whole document is parsed, point references that name a citation at that citation.
-	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations) {
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events, const std::vector<Citation>& citations) {
 		std::unordered_set<std::string> ids;
 		for (const auto& c : citations) ids.insert(c.id);
 		if (ids.empty()) return;
@@ -516,6 +516,15 @@ namespace gedcomx {
 			remapRefs(r.conclusion.sources, ids);
 			for (auto& f : r.facts) remapRefs(f.conclusion.sources, ids);
 		}
+		for (auto& e : events) {
+			remapRefs(e.conclusion.sources, ids);
+			for (auto& role : e.roles) remapRefs(role.conclusion.sources, ids);
+		}
+	}
+
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations) {
+		std::vector<Event> none;
+		resolveCitationReferences(persons, relationships, none, citations);
 	}
 
 	// --- Serializers ---
@@ -706,7 +715,8 @@ namespace gedcomx {
 		const std::vector<gedcomx::Person>& persons,
 		const std::vector<gedcomx::Relationship>& relationships,
 		const std::vector<gedcomx::SourceDescription>& otherSources,
-		const std::vector<gedcomx::Citation>& citations) {
+		const std::vector<gedcomx::Citation>& citations,
+		const std::vector<gedcomx::Event>& events) {
 		nlohmann::json doc;
 
 		doc["sourceDescriptions"] = nlohmann::json::array({ serializeSourceDescription(source) });
@@ -723,6 +733,13 @@ namespace gedcomx {
 		nlohmann::json relsJson = nlohmann::json::array();
 		for (const auto& r : relationships) relsJson.push_back(serializeRelationship(r));
 		doc["relationships"] = relsJson;
+
+		if (!events.empty()) {
+			nlohmann::json eventsJson = nlohmann::json::array();
+			for (const auto& e : events)
+				eventsJson.push_back(serializeEvent(e));
+			doc["events"] = eventsJson;
+		}
 
 		return doc;
 	}

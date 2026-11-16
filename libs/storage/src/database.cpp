@@ -823,6 +823,13 @@ namespace storage {
 					result.relationships.push_back(std::move(rel));
 			});
 
+			for (auto& e : loadEventsForSource(sourceId)) {
+				e.id = stripRowKeyPrefix(e.id, sourceId);
+				for (auto& r : e.roles)
+					r.personId = stripRowKeyPrefix(r.personId, sourceId);
+				result.events.push_back(std::move(e));
+			}
+
 			for (auto& c : loadCitationsForSource(sourceId)) {
 				if (gedcomx::isBare(c)) continue;
 				citationIds.insert(c.id);
@@ -851,6 +858,12 @@ namespace storage {
 			for (const auto& r : result.relationships) {
 				noteRefs(r.conclusion.sources);
 				for (const auto& f : r.facts) noteRefs(f.conclusion.sources);
+			}
+
+			for (const auto& e : result.events) {
+				noteRefs(e.conclusion.sources);
+				for (const auto& r : e.roles)
+					noteRefs(r.conclusion.sources);
 			}
 
 			if (!otherSourceIds.empty()) {

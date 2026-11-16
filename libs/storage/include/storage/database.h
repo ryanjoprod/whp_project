@@ -46,6 +46,7 @@ namespace storage {
 		std::vector<gedcomx::Relationship> relationships;
 		std::vector<gedcomx::SourceDescription> otherSources;  // other sources the export cites,so the files is self-contained
 		std::vector<gedcomx::Citation> citations;  // real citations only; bare ones are just "#S1" on a reference
+		std::vector<gedcomx::Event> events;
 	};
 
 	class Database {
@@ -101,6 +102,8 @@ namespace storage {
 
 		void save(const gedcomx::PlaceDescription& place);
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces();
+
+		std::vector<gedcomx::Event> events;  // events owned by this source; ids and role persons are local, prefix stripped 
 
 		// Requests methods
 		std::vector<gedcomx::Person> searchPersonsByName(const std::string& query, const std::string& sourceIdFilter = "", int limit = 20);
