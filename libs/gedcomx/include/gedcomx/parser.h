@@ -52,6 +52,8 @@ namespace gedcomx {
 	nlohmann::json serializeFact(const gedcomx::Fact& fact);
 	nlohmann::json serializePerson(const gedcomx::Person& person);
 	nlohmann::json serializeRelationship(const gedcomx::Relationship& rel);
+	nlohmann::json serializeEventRole(const gedcomx::EventRole& role);
+	nlohmann::json serializeEvent(const gedcomx::Event& event);
 	nlohmann::json serializeSourceDescription(const gedcomx::SourceDescription& source);
 	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source,
 		const std::vector<gedcomx::Person>& persons,

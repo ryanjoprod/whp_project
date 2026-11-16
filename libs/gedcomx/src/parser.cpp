@@ -101,6 +101,31 @@ namespace {
 
 		return notes;
 	}
+
+	bool isEmptyDate(const gedcomx::Date& d) {
+		return d.original.empty() && d.formal.empty() && d.calendar.empty() && d.quality.empty() && !d.sortValue;
+	}
+
+	gedcomx::Date parseDate(const nlohmann::json j) {
+		gedcomx::Date d;
+		d.original = j.value("original", "");
+		d.formal = j.value("formal", "");
+		d.calendar = j.value("calendar", "");  // app extensions; absent in files from other programs
+		d.quality = j.value("quality", "");
+		if (j.contains("sortValue") && j.at("sortValue").is_number_integer())
+			d.sortValue = j.at("sortValue").get<long long>();
+		return d;
+	}
+
+	nlohmann::json serializeDate(const gedcomx::Date& d) {
+		nlohmann::json j = nlohmann::json::object();
+		if (!d.original.empty()) j["original"] = d.original;
+		if (!d.formal.empty()) j["formal"] = d.formal;
+		if (!d.calendar.empty()) j["calendar"] = d.calendar;
+		if (!d.quality.empty()) j["quality"] = d.quality;
+		if (d.sortValue) j["sortValue"] = *d.sortValue;
+		return j;
+	}
 }
 
 namespace gedcomx {
@@ -251,10 +276,7 @@ namespace gedcomx {
 		fact.type = j.value("type", "");
 		fact.value = j.value("value", "");
 
-		if (j.contains("date")) {
-			fact.date.original = j.at("date").value("original", "");
-			fact.date.formal = j.at("date").value("formal", "");
-		}
+		if (j.contains("date")) fact.date = parseDate(j.at("date"));
 
 		if (j.contains("place")) {
 			fact.place.original = j.at("place").value("original", "");
@@ -358,11 +380,9 @@ namespace gedcomx {
 		Event event;
 		event.id = j.value("id", "");
 		event.type = j.value("type", "");
+		event.description = j.value("description", "");
 
-		if (j.contains("date")) {
-			event.date.original = j.at("date").value("original", "");
-			event.date.formal = j.at("date").value("formal", "");
-		}
+		if (j.contains("date")) event.date = parseDate(j.at("date"));
 
 		if (j.contains("place")) {
 			event.place.original = j.at("place").value("original", "");
@@ -471,8 +491,7 @@ namespace gedcomx {
 				c.page = j.at("citations")[0].value("value", "");
 			if (j.contains("coverage") && !j.at("coverage").empty() && j.at("coverage")[0].contains("temporal")) {
 				const auto& temporal = j.at("coverage")[0].at("temporal");
-				c.date.original = temporal.value("original", "");
-				c.date.formal = temporal.value("formal", "");
+				c.date = parseDate(temporal);
 			}
 			c.confidence = j.value("confidence", "");
 			c.notes = parseNotes(j);
@@ -525,12 +544,7 @@ namespace gedcomx {
 		j["id"] = fact.id;
 		j["type"] = fact.type;
 
-		if (!fact.date.original.empty() || !fact.date.formal.empty()) {
-			nlohmann::json date;
-			if (!fact.date.original.empty()) date["original"] = fact.date.original;
-			if (!fact.date.formal.empty()) date["formal"] = fact.date.formal;
-			j["date"] = date;
-		}
+		if (!isEmptyDate(fact.date)) j["date"] = serializeDate(fact.date);
 
 		if (!fact.place.original.empty() || !fact.place.descriptionId.empty()) {
 			nlohmann::json place;
@@ -620,6 +634,38 @@ namespace gedcomx {
 		return j;
 	}
 
+	nlohmann::json serializeEventRole(const gedcomx::EventRole& role) {
+		nlohmann::json j = serializeConclusion(role.conclusion);
+		j["person"] = { { "resource", "#" + role.personId } };
+		if (!role.type.empty()) j["type"] = role.type;
+		if (!role.details.empty()) j["details"] = role.details;
+		return j;
+	}
+
+	nlohmann::json serializeEvent(const gedcomx::Event& event) {
+		nlohmann::json j = serializeConclusion(event.conclusion);
+		j["id"] = event.id;
+		if (!event.type.empty()) j["type"] = event.type;
+		if (!isEmptyDate(event.date)) j["date"] = serializeDate(event.date);
+
+		if (!event.place.original.empty() || !event.place.descriptionId.empty()) {
+			nlohmann::json place;
+			if (!event.place.original.empty()) place["original"] = event.place.original;
+			if (!event.place.descriptionId.empty()) place["description"] = { { "resource", "#" + event.place.descriptionId } };
+			j["place"] = place;
+		}
+
+		if (!event.description.empty()) j["description"] = event.description;
+
+		if (!event.roles.empty()) {
+			nlohmann::json roles = nlohmann::json::array();
+			for (const auto& r : event.roles) roles.push_back(serializeEventRole(r));
+			j["roles"] = roles;
+		}
+
+		return j;
+	}
+
 	nlohmann::json serializeSourceDescription(const gedcomx::SourceDescription& source) {
 		nlohmann::json j;
 		j["id"] = source.id;
@@ -691,12 +737,9 @@ namespace gedcomx {
 			citation["value"] = c.page;
 			j["citations"] = nlohmann::json::array({ citation });
 		}
-		if (!c.date.original.empty() || !c.date.formal.empty()) {
-			nlohmann::json temporal;
-			if (!c.date.original.empty()) temporal["original"] = c.date.original;
-			if (!c.date.formal.empty()) temporal["formal"] = c.date.formal;
+		if (!isEmptyDate(c.date)) {
 			nlohmann::json coverage;
-			coverage["temporal"] = temporal;
+			coverage["temporal"] = serializeDate(c.date);
 			j["coverage"] = nlohmann::json::array({ coverage });
 		}
 
