@@ -669,10 +669,10 @@ namespace storage {
 		void save(const gedcomx::PlaceDescription& place) {
 			Transaction tx(*this);
 
-			upsert("INSERT INTO places (id, type, latitude, longitude, jurisdiction_id, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
+			upsert("INSERT INTO places (id, type, latitude, longitude, code, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
 				"ON CONFLICT(id) "
 				"DO UPDATE SET type = excluded.type, latitude = excluded.latitude, longitude = excluded.longitude, "
-				"jurisdiction_id = excluded.jurisdiction_id, confidence = excluded.confidence, lang = excluded.lang;",
+				"code = excluded.code, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
 					bindText(s, 1, place.id);
 					bindText(s, 2, place.type);
@@ -680,23 +680,45 @@ namespace storage {
 					else sqlite3_bind_null(s, 3);
 					if (place.longitude) sqlite3_bind_double(s, 4, *place.longitude);
 					else sqlite3_bind_null(s, 4);
-					if (place.jurisdictionId.empty()) sqlite3_bind_null(s, 5);
-					else bindText(s, 5, place.jurisdictionId);
+					bindText(s, 5, place.code);
 					bindText(s, 6, place.conclusion.confidence);
 					bindText(s, 7, place.conclusion.lang);
 				});
 
 			exec("DELETE FROM place_names WHERE place_id = ?;", { place.id });
 			for (const auto& name : place.names) {
-				upsert("INSERT INTO place_names (place_id, lang, value) VALUES (?, ?, ?);",
+				upsert(std::string("INSERT INTO place_names (place_id, lang, value, ") + kDateColumns + ") VALUES (?, ?, ?, " + kDatePlaceholders + ");",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, place.id);
 						bindText(s, 2, name.lang);
 						bindText(s, 3, name.value);
+						bindDate(s, 4, name.date);
+					});
+			}
+
+			exec("DELETE FROM place_jurisdictions WHERE place_id = ?;", { place.id });
+			for (const auto& j : place.jurisdictions) {
+				upsert(std::string("INSERT INTO place_jurisdictions (place_id, parent_id, ") + kDateColumns + ") VALUES (?, ?, " + kDatePlaceholders + ");",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, place.id);
+						bindText(s, 2, j.parentId);
+						bindDate(s, 3, j.date);
+					});
+			}
+
+			exec("DELETE FROM place_urls WHERE place_id = ?;", { place.id });
+			for (const auto& u : place.urls) {
+				upsert("INSERT INTO place_urls (place_id, url, description, type) VALUES (?, ?, ?, ?);",
+					[&](sqlite3_stmt* s) {
+						bindText(s, 1, place.id);
+						bindText(s, 2, u.url);
+						bindText(s, 3, u.description);
+						bindText(s, 4, u.type);
 					});
 			}
 
 			saveNotesFor("place_notes", "place_id", place.id, place.conclusion.notes);
+			saveCitationRefs("place_citations", "place_id", place.id, place.conclusion.sources);
 
 			tx.commit();
 		 }
@@ -704,7 +726,7 @@ namespace storage {
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces() {
 			std::vector<gedcomx::PlaceDescription> results;
 
-			query("SELECT id, type, latitude, longitude, jurisdiction_id, confidence, lang FROM places;", {},
+			query("SELECT id, type, latitude, longitude, code, confidence, lang FROM places;", {},
 				[&](sqlite3_stmt* s) {
 					gedcomx::PlaceDescription place;
 
@@ -714,14 +736,25 @@ namespace storage {
 					if (sqlite3_column_type(s, 2) != SQLITE_NULL) place.latitude = sqlite3_column_double(s, 2);
 					if (sqlite3_column_type(s, 3) != SQLITE_NULL) place.longitude = sqlite3_column_double(s, 3);
 
-					place.jurisdictionId = columnText(s, 4);
+					place.code = columnText(s, 4);
 					place.conclusion.confidence = columnText(s, 5);
 					place.conclusion.lang = columnText(s, 6);
 					place.conclusion.notes = loadNotesFor("place_notes", "place_id", place.id);
+					place.conclusion.sources = loadCitationRefsFor("place_citations", "place_id", place.id);
 
-					query("SELECT lang, value FROM place_names WHERE place_id = ?;", { place.id },
+					query(std::string("SELECT lang, value, ") + kDateColumns + " FROM place_names WHERE place_id = ? ORDER BY id;", { place.id },
 						[&](sqlite3_stmt* ns) {
-							place.names.push_back({ columnText(ns, 0), columnText(ns, 1) });
+							place.names.push_back({ columnText(ns, 0), columnText(ns, 1), readDate(ns, 2) });
+						});
+
+					query(std::string("SELECT parent_id, ") + kDateColumns + " FROM place_jurisdictions WHERE place_id = ? ORDER BY id;", { place.id },
+						[&](sqlite3_stmt* js) {
+							place.jurisdictions.push_back({ columnText(js, 0), readDate(js, 1) });
+						});
+
+					query("SELECT url, description, type FROM place_urls WHERE place_id = ? ORDER BY id;", { place.id },
+						[&](sqlite3_stmt* us) {
+							place.urls.push_back({ columnText(us, 0), columnText(us, 1), columnText(us, 2) });
 						});
 
 					results.push_back(std::move(place));

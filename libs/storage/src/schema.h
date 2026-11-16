@@ -123,6 +123,14 @@ namespace storage {
 			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
 		);
 
+		CREATE TABLE IF NOT EXISTS person_fact_attributes (
+			row_key TEXT PRIMARY KEY,
+			person_fact_id TEXT NOT NULL,
+			type TEXT,
+			value TEXT,
+			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE
+		);
+
 		CREATE TABLE IF NOT EXISTS person_links (
 			aggregate_id TEXT NOT NULL,
 			person_id TEXT NOT NULL,
@@ -236,6 +244,14 @@ namespace storage {
 			citation_id TEXT NOT NULL,
 			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE,
 			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
+		);
+
+		CREATE TABLE IF NOT EXISTS relationship_fact_attributes (
+			row_key TEXT PRIMARY KEY,
+			relationship_fact_id TEXT NOT NULL,
+			type TEXT,
+			value TEXT,
+			FOREIGN KEY (relationship_fact_id) REFERENCES relationship_facts(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS agents (
@@ -417,6 +433,23 @@ namespace storage {
 			date_sort INTEGER,
 			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
 			FOREIGN KEY (parent_id) REFERENCES places(id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
+		);
+
+		CREATE TABLE IF NOT EXISTS place_citations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			place_id TEXT NOT NULL,
+			citation_id TEXT NOT NULL,
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE,
+			FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE RESTRICT
+		);
+
+		CREATE TABLE IF NOT EXISTS place_urls (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			place_id TEXT NOT NULL,
+			url TEXT,
+			description TEXT,
+			type TEXT,
+			FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
 		);
 	)";
 }

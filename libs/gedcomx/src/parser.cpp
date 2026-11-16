@@ -432,7 +432,8 @@ namespace gedcomx {
 		if (j.contains("longitude")) place.longitude = j.at("longitude").get<double>();
 
 		if (j.contains("jurisdiction")) {
-			place.jurisdictionId = stripResourceRef(j.at("jurisdiction").value("resource", ""));
+			const std::string parent = stripResourceRef(j.at("jurisdiction").value("resource", ""));
+			if (!parent.empty()) place.jurisdictions.push_back({ parent,{} });
 		}
 
 		place.conclusion = parseConclusion(j);
