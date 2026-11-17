@@ -126,6 +126,21 @@ namespace {
 		if (d.sortValue) j["sortValue"] = *d.sortValue;
 		return j;
 	}
+
+	std::vector<gedcomx::Attribute> parseAttributes(const nlohmann::json& j) {
+		std::vector<gedcomx::Attribute> out;
+		if (j.contains("attributes")) {
+			for (const auto& a : j.at("attributes"))
+				out.push_back({ a.value("id", ""), a.value("type", ""), a.value("value", "") });
+		}
+		return out;
+	}
+
+	nlohmann::json serializeAttributes(const std::vector<gedcomx::Attribute> attrs) {
+		nlohmann::json out = nlohmann::json::array();
+		for (const auto& a : attrs) out.push_back({ { "id", a.id },{ "type", a.type },{ "value", a.value } });
+		return out;
+	}
 }
 
 namespace gedcomx {
@@ -172,11 +187,7 @@ namespace gedcomx {
 			if (!type.empty()) person.gender = Gender{ type };
 		}
 
-		if (j.contains("attributes")) {
-			for (const auto& a : j.at("attributes")) {
-				person.attributes.push_back({ a.value("id", ""), a.value("type", ""), a.value("value", "") });
-			}
-		}
+		person.attributes = parseAttributes(j);
 
 		if (j.contains("addresses")) {
 			for (const auto& a : j.at("addresses"))
@@ -252,6 +263,7 @@ namespace gedcomx {
 		source.publication = j.value("publication", "");
 		source.abbreviation = j.value("abbreviation", "");
 		source.notes = parseNotes(j);
+		source.attributes = parseAttributes(j);
 
 		return source;
 	}
@@ -494,6 +506,7 @@ namespace gedcomx {
 				c.date = parseDate(temporal);
 			}
 			c.confidence = j.value("confidence", "");
+			c.attributes = parseAttributes(j);
 			c.notes = parseNotes(j);
 			citations.push_back(std::move(c));
 		}
@@ -610,11 +623,7 @@ namespace gedcomx {
 
 		if (person.gender && !person.gender->type.empty()) j["gender"]["type"] = person.gender->type;
 
-		if (!person.attributes.empty()) {
-			nlohmann::json attrs = nlohmann::json::array();
-			for (const auto& a : person.attributes) attrs.push_back({ { "id", a.id },{ "type", a.type },{ "value", a.value } });
-			j["attributes"] = attrs;
-		}
+		if (!person.attributes.empty()) j["attributes"] = serializeAttributes(person.attributes);
 
 		if (!person.addresses.empty()) {
 			nlohmann::json addrs = nlohmann::json::array();
@@ -707,6 +716,7 @@ namespace gedcomx {
 		if (!source.publication.empty()) j["publication"] = source.publication;
 		if (!source.abbreviation.empty()) j["abbreviation"] = source.abbreviation;
 		if (!source.notes.empty()) j["notes"] = serializeNotes(source.notes);
+		if (!source.attributes.empty()) j["attributes"] = serializeAttributes(source.attributes);
 
 		return j;
 	}
@@ -761,6 +771,7 @@ namespace gedcomx {
 		}
 
 		if (!c.confidence.empty()) j["confidence"] = c.confidence;  // not a GEDCOM X property; an app extension
+		if (!c.attributes.empty()) j["attributes"] = serializeAttributes(c.attributes);
 		if (!c.notes.empty()) j["notes"] = serializeNotes(c.notes);
 
 		return j;

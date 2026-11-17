@@ -5,6 +5,7 @@
 
 #include "gedcomx/text_value.h"
 #include "gedcomx/conclusion.h"
+#include "gedcomx/attribute.h"
 
 namespace gedcomx {
 
@@ -24,6 +25,7 @@ namespace gedcomx {
 		std::string publication;  // Gramps "Pub. info."
 		std::string abbreviation;  // short label for lists and reports
 		std::vector<Note> notes;
+		std::vector<Attribute> attributes; 
 
 		// Convenience accessor, same spirit as Person::primaryFullText().
 		std::string primaryTitle() const {

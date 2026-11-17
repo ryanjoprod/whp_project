@@ -105,7 +105,7 @@ namespace storage {
 			saveNotesFor("person_notes", "person_id", key, person.conclusion.notes);
 			saveCitationRefs("person_citations", "person_id", key, person.conclusion.sources);
 			saveAddressesFor(key, person.addresses);
-			saveAttributesFor(key, person.attributes);
+			saveAttributesFor("person_attributes", "person_id", key, person.attributes);
 
 			tx.commit();
 		}
@@ -131,7 +131,7 @@ namespace storage {
 					person.conclusion.sources = loadCitationRefsFor("person_citations", "person_id", key);
 					std::string genderType = columnText(s, 5);
 					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
-					person.attributes = loadAttributesFor(key);
+					person.attributes = loadAttributesFor("person_attributes", "person_id", key);
 					person.addresses = loadAddressesFor(key);
 
 					people[key] = std::move(person);
@@ -215,7 +215,7 @@ namespace storage {
 					person.conclusion.sources = loadCitationRefsFor("person_citations", "person_id", key);
 					std::string genderType = columnText(s, 5);
 					if (!genderType.empty()) person.gender = gedcomx::Gender{ genderType };
-					person.attributes = loadAttributesFor(key);
+					person.attributes = loadAttributesFor("person_attributes", "person_id", key);
 					person.addresses = loadAddressesFor(key);
 
 					result = person;
@@ -345,6 +345,7 @@ namespace storage {
 					bindText(s, 6, source.abbreviation);
 				});
 			saveNotesFor("source_notes", "source_id", source.id, source.notes);
+			saveAttributesFor("source_attributes", "source_id", source.id, source.attributes);
 			tx.commit();
 		}
 
@@ -361,6 +362,7 @@ namespace storage {
 					src.publication = columnText(s, 4);
 					src.abbreviation = columnText(s, 5);
 					src.notes = loadNotesFor("source_notes", "source_id", src.id);
+					src.attributes = loadAttributesFor("source_attributes", "source_id", src.id);
 					results.push_back(std::move(src));
 				});
 
@@ -380,6 +382,7 @@ namespace storage {
 					bindDate(s, 5, c.date);
 				});
 			saveNotesFor("citation_notes", "citation_id", c.id, c.notes);
+			saveAttributesFor("citation_attributes", "citation_id", c.id, c.attributes);
 			tx.commit();
 		}
 
@@ -391,6 +394,7 @@ namespace storage {
 			c.confidence = columnText(s, 3);
 			c.date = readDate(s, 4);
 			c.notes = loadNotesFor("citation_notes", "citation_id", c.id);
+			c.attributes = loadAttributesFor("citation_attributes", "citation_id", c.id);
 			return c;
 		}
 
@@ -875,11 +879,12 @@ namespace storage {
 			return result;
 		}
 
-		void saveAttributesFor(const std::string& ownerKey, const std::vector<gedcomx::Attribute>& attrs) {
-			exec("DELETE FROM person_attributes WHERE person_id = ?;", { ownerKey });
-			for (const auto& a : attrs) {
-				std::string attrKey = rowKey(ownerKey, a.id);
-				upsert("INSERT INTO person_attributes (row_key, person_id, type, value) VALUES (?, ?, ?, ?);",
+		void saveAttributesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey, const std::vector<gedcomx::Attribute>& attrs) {
+			exec("DELETE FROM " + table + " WHERE " + fkColumn + " = ?; ", { ownerKey });
+			for (size_t i = 0; i < attrs.size(); ++i) {
+				const auto& a = attrs[i];
+				const std::string attrKey = rowKey(ownerKey, a.id.empty() ? "a" + std::to_string(i) : a.id);
+				upsert("INSERT INTO " + table + " (row_key, " + fkColumn + ", type, value) VALUES(?, ?, ?, ?);",
 					[&](sqlite3_stmt* s) {
 						bindText(s, 1, attrKey);
 						bindText(s, 2, ownerKey);
@@ -889,9 +894,9 @@ namespace storage {
 			}
 		}
 
-		std::vector<gedcomx::Attribute> loadAttributesFor(const std::string& ownerKey) {
+		std::vector<gedcomx::Attribute> loadAttributesFor(const std::string& table, const std::string& fkColumn, const std::string& ownerKey) {
 			std::vector<gedcomx::Attribute> result;
-			query("SELECT row_key, type, value FROM person_attributes WHERE person_id = ?;", { ownerKey },
+			query("SELECT row_key, type, value FROM " + table + " WHERE " + fkColumn + " = ?;", { ownerKey },
 				[&](sqlite3_stmt* s) {
 					gedcomx::Attribute a;
 					a.id = stripSourcePrefix(columnText(s, 0), ownerKey);
