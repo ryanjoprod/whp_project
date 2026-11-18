@@ -29,6 +29,12 @@ struct EditableNote {
 	char text[2048] = "";
 };
 
+struct EditableAttribute {
+	std::string id;  // kept as loaded; new rows get one when collected
+	char type[128] = "";
+	char value[256] = "";
+};
+
 class Window {
 public:
 	Window();
@@ -291,6 +297,12 @@ private:
 	char sourcePubInfoBuffer_[512] = "";
 	char sourceAbbrevBuffer_[64] = "";
 	std::vector<EditableNote> sourceNotes_;
+	std::vector<EditableAttribute> sourceAttributes_;
+	std::vector<EditableAttribute> citationAttributes_;
+
+	void renderEditableAttributes(std::vector<EditableAttribute>& attributes);
+	static void fillEditableAttributes(std::vector<EditableAttribute>& out, const std::vector<gedcomx::Attribute>& attributes);
+	static std::vector<gedcomx::Attribute> collectAttributes(const std::vector<EditableAttribute>& attributes);
 
 	void openSourceEditor(SourceEditorOwner owner, const gedcomx::SourceDescription* existing);
 	void renderSourceEditor(SourceEditorOwner owner);

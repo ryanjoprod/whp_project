@@ -289,7 +289,7 @@ void Window::renderPersonEditorAttributesTab() {
 		if (ImGui::SmallButton("Edit")) {
 			editingAttributeIndex_ = i;
 			strncpy_s(attrTypeBuffer_, attr.type.c_str(), sizeof(attrTypeBuffer_) - 1);
-			strncpy_s(attrValueBuffer_, attr.type.c_str(), sizeof(attrValueBuffer_) - 1);
+			strncpy_s(attrValueBuffer_, attr.value.c_str(), sizeof(attrValueBuffer_) - 1);
 		}
 		ImGui::SameLine();
 		bool removed = false;
@@ -315,7 +315,7 @@ void Window::renderPersonEditorAttributesTab() {
 		attr.type = attrTypeBuffer_;
 		attr.value = attrValueBuffer_;
 
-		if (editingAddressIndex_ >= 0) {
+		if (editingAttributeIndex_ >= 0) {
 			attr.id = workingPerson_.attributes[editingAttributeIndex_].id;
 			workingPerson_.attributes[editingAttributeIndex_] = attr;
 		}
