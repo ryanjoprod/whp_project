@@ -71,6 +71,12 @@ namespace storage {
 			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
+		CREATE TABLE IF NOT EXISTS person_links (
+			person_id TEXT PRIMARY KEY,
+			aggregate_id TEXT NOT NULL,
+			FOREIGN KEY (person_id) REFERENCES person(row_key) ON DELETE CASCADE
+		);
+
 		CREATE TABLE IF NOT EXISTS person_notes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			person_id TEXT NOT NULL,
@@ -129,12 +135,6 @@ namespace storage {
 			type TEXT,
 			value TEXT,
 			FOREIGN KEY (person_fact_id) REFERENCES person_facts(row_key) ON DELETE CASCADE
-		);
-
-		CREATE TABLE IF NOT EXISTS person_links (
-			aggregate_id TEXT NOT NULL,
-			person_id TEXT NOT NULL,
-			FOREIGN KEY (person_id) REFERENCES persons(row_key)	ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_attributes (

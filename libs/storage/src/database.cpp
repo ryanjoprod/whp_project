@@ -148,10 +148,11 @@ namespace storage {
 			for (const auto& ref : refs) {
 				std::string key = rowKey(ref.sourceId, ref.localId);
 
-				upsert("INSERT INTO person_links (aggregate_id, person_id) VALUES (?, ?);",
+				upsert("INSERT INTO person_links (person_id, aggregate_id) VALUES (?, ?) "
+					"ON CONFLICT(person_id) DO UPDATE SET aggregate_id = excluded.aggregate_id; ",
 					[&](sqlite3_stmt* s) {
-						bindText(s, 1, aggregateId);
-						bindText(s, 2, key);
+						bindText(s, 1, key);
+						bindText(s, 2, aggregateId);
 					});
 			}
 		}
