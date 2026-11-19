@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <algorithm>
 
 namespace storage {
 	class Database::Impl {
@@ -948,6 +949,86 @@ namespace storage {
 			tx.commit();
 		}
 
+		std::string personLabel(const std::string& personKey) {
+			std::string label;
+			query("SELECT name_forms.full_text FROM names JOIN name_forms ON name_forms.name_id = names.id "
+				"WHERE names.person_id = ? ORDER BY names.id, name_forms.id LIMIT 1;", { personKey },
+				[&](sqlite3_stmt* s) { label = columnText(s, 0); });
+			return label.empty() ? "(unnamed)" : label;
+		}
+
+		std::string placeLabel(const std::string& placeId) {
+			std::string label;
+			query("SELECT value FROM place_names WHERE place_id = ? ORDER BY id LIMIT 1;", { placeId },
+				[&](sqlite3_stmt* s) { label = columnText(s, 0); });
+			return label.empty() ? placeId : label;
+		}
+
+		std::vector<Reference> loadReferences(const std::string& value, bool bySource) {
+			auto filter = [&](const std::string& column) {
+				return bySource ? column + " IN (SELECT id FROM citations WHERE source_id = ?)" : column + " = ?";
+				};
+			std::vector<Reference> out;
+
+			query("SELECT person_id, citation_id FROM person_citations WHERE " + filter("citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					const std::string person = columnText(s, 0);
+					out.push_back({ "Person", person, personLabel(person), columnText(s, 1) });
+				});
+
+			query("SELECT f.person_id, f.type, fc.citation_id FROM person_fact_citations fc "
+				"JOIN person_facts f ON f.row_key = fc.person_fact_id WHERE " + filter("fc.citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					const std::string person = columnText(s, 0);
+					out.push_back({ "Person fact", person, gedcomx::formatTypeUri(columnText(s, 1)) + " of " + personLabel(person), columnText(s, 2) });
+				});
+
+			query("SELECT r.row_key, r.type, r.person1_id, r.person2_id, rc.citation_id FROM relationship_citations rc "
+				"JOIN relationships r ON r.row_key = rc.relationship_id WHERE " + filter("rc.citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					out.push_back({ "Relationship", columnText(s, 0),
+						gedcomx::formatTypeUri(columnText(s, 1)) + ": " + personLabel(columnText(s, 2)) + " & " + personLabel(columnText(s, 3)),
+						columnText(s, 4) });
+				});
+
+			query("SELECT r.row_key, f.type, r.person1_id, r.person2_id, fc.citation_id FROM relationship_fact_citations fc "
+				"JOIN relationship_facts f ON f.row_key = fc.relationship_fact_id "
+				"JOIN relationships r ON r.row_key = f.relationship_id WHERE " + filter("fc.citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					out.push_back({ "Relationship fact", columnText(s, 0),
+						gedcomx::formatTypeUri(columnText(s, 1)) + ": " + personLabel(columnText(s, 2)) + " & " + personLabel(columnText(s, 3)),
+						columnText(s, 4) });
+				});
+
+			query("SELECT e.row_key, e.type, e.description, ec.citation_id FROM event_citations ec "
+				"JOIN events e ON e.row_key = ec.event_id WHERE " + filter("ec.citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					const std::string description = columnText(s, 2);
+					out.push_back({ "Event", columnText(s, 0),
+						gedcomx::formatTypeUri(columnText(s, 1)) + (description.empty() ? "" : " - " + description), columnText(s, 3) });
+				});
+
+			query("SELECT e.row_key, e.type, r.type, r.person_id, rc.citation_id FROM event_role_citations rc "
+				"JOIN event_roles r ON r.id = rc.event_role_id JOIN events e ON e.row_key = r.event_id "
+				"WHERE " + filter("rc.citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					out.push_back({ "Event role", columnText(s, 0),
+						gedcomx::formatTypeUri(columnText(s, 2)) + " " + personLabel(columnText(s, 3)) + " in " + gedcomx::formatTypeUri(columnText(s, 1)),
+						columnText(s, 4) });
+				});
+
+			query("SELECT place_id, citation_id FROM place_citations WHERE " + filter("citation_id") + ";", { value },
+				[&](sqlite3_stmt* s) {
+					out.push_back({ "Place", columnText(s, 0), placeLabel(columnText(s, 0)), columnText(s, 1) });
+				});
+
+			std::sort(out.begin(), out.end(), [](const Reference& a, const Reference& b) {
+				return a.kind != b.kind ? a.kind < b.kind : a.label < b.label;
+			});
+
+			return out;
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 
@@ -1401,5 +1482,13 @@ namespace storage {
 
 	void Database::runInTransaction(const std::function<void()>& work) {
 		impl_->runInTransaction(work);
+	}
+
+	std::vector<Reference> Database::loadCitationReferences(const std::string& citationId) {
+		return impl_->loadReferences(citationId, false);
+	}
+
+	std::vector<Reference> Database::loadSourceReferences(const std::string& sourceId) {
+		return impl_->loadReferences(sourceId, true);
 	}
 };

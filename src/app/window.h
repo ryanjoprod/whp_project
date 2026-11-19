@@ -29,6 +29,13 @@ struct EditableNote {
 	char text[2048] = "";
 };
 
+enum class ReferencesKind { Source, Citation };
+
+struct ReferencesRequest {
+	ReferencesKind kind;
+	std::string id;
+};
+
 struct EditableAttribute {
 	std::string id;  // kept as loaded; new rows get one when collected
 	char type[128] = "";
@@ -184,6 +191,13 @@ public:
 		knownCitations_ = citations;
 	}
 	std::optional<gedcomx::Citation> consumeCitationSave();
+
+	std::optional<ReferencesRequest> consumeReferencesRequest() {
+		auto request = pendingReferencesRequest_;
+		pendingReferencesRequest_.reset();
+		return request;
+	}
+	void setReferences(ReferencesKind kind, const std::string& id, std::vector<storage::Reference> refs);
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -454,4 +468,11 @@ private:
 	int selectedGoToIndex_ = -1;
 	std::optional<std::string> pendingGoToSearchQuery_;
 	std::optional<std::string> goToPersonResult_;
+
+	std::optional<ReferencesRequest> pendingReferencesRequest_;
+	std::vector<storage::Reference> sourceReferences_;
+	std::string sourceReferencesFor_;  // the id the list belongs to, so a stale answer is never shown
+	std::vector<storage::Reference> citationReferences_;
+	std::string citationReferencesFor_;
+	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
 };

@@ -49,6 +49,13 @@ namespace storage {
 		std::vector<gedcomx::Event> events;
 	};
 
+	struct Reference {
+		std::string kind;  // "Person", "Person fact", "Relationship", "Relationship fact", "Event", "Event role", "Place"
+		std::string ownerKey;  // row key or id of the citing record; kept so a later step can jump to it
+		std::string label;  // readable, e.g. "Birth of Abraham", "Marriage: Abraham & Sarah"
+		std::string citationId;  // which citation it cites; tells a source's list which one 
+	};
+
 	class Database {
 	public:
 		explicit Database(const std::string& path);
@@ -104,6 +111,9 @@ namespace storage {
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces();
 
 		std::vector<gedcomx::Event> events;  // events owned by this source; ids and role persons are local, prefix stripped 
+
+		std::vector<Reference> loadCitationReferences(const std::string& citationId);
+		std::vector<Reference> loadSourceReferences(const std::string& sourceId);  // every citation of the source, bare one included
 
 		// Requests methods
 		std::vector<gedcomx::Person> searchPersonsByName(const std::string& query, const std::string& sourceIdFilter = "", int limit = 20);

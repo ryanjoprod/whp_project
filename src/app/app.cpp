@@ -831,6 +831,18 @@ void App::run() {
 				Logger::log(LogLevel::Error, std::string("Failed to load children: ") + e.what());
 			}
 		}
+
+		if (auto request = window_.consumeReferencesRequest()) {
+			try {
+				auto refs = request->kind == ReferencesKind::Source
+					? db_->loadSourceReferences(request->id)
+					: db_->loadCitationReferences(request->id);
+				window_.setReferences(request->kind, request->id, std::move(refs));
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load references: ") + e.what());
+			}
+		}
 	}
 
 	try {
