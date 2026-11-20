@@ -15,8 +15,15 @@ namespace storage {
 			if (sqlite3_open(path.c_str(), &db_) != SQLITE_OK) {
 				throw std::runtime_error("Failed to open database: " + path);
 			}
-			exec("PRAGMA foreign_keys = ON;");
-			ensureSchemaVersion();
+			try {
+				exec("PRAGMA foreign_keys = ON;");
+				ensureSchemaVersion();
+			}
+			catch (...) {
+				sqlite3_close(db_);  // the destructor will not run for a half-built object
+				db_ = nullptr;
+				throw;
+			}
 		}
 
 		~Impl() {
@@ -1106,9 +1113,15 @@ namespace storage {
 					tableCount = sqlite3_column_int(s, 0);
 			});
 
-			if (tableCount > 0 && version < kSchemaVersion) {
-				throw std::runtime_error("This project uses an older database format (v" + std::to_string(version) + "). Please create a new project.");
+			if (tableCount > 0 && version < kMinSupportedVersion) {
+				throw std::runtime_error("This project was created by a pre-release build (database v" + std::to_string(version) + ") and cannot be opened. Please create a new project and re-import your files.");
 			}
+
+			if (tableCount > 0 && version > kSchemaVersion) {
+				throw std::runtime_error("This project was created by a newer version of WHP (database v" + std::to_string(version) + "). Please update the program.");
+			}
+
+			// later: if (tableCount > 0 && version < kSchemaVersion) runMigrations(version);
 			createSchema();
 			if (tableCount == 0) exec("PRAGMA user_version = " + std::to_string(kSchemaVersion) + ";");
 		}

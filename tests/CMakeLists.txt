@@ -1,4 +1,5 @@
 find_package(doctest CONFIG REQUIRED)
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 add_executable(whp_tests
 	test_main.cpp
@@ -18,7 +19,8 @@ add_executable(whp_tests
 	storage/test_event_storage.cpp
 	storage/test_references_storage.cpp
 	storage/test_document_storage.cpp
+	storage/test_schema_version.cpp
 )
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest)
+target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest unofficial::sqlite3::sqlite3)

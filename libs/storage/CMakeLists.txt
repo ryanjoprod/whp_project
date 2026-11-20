@@ -2,7 +2,7 @@ find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 add_library(storage STATIC
 	src/database.cpp
-)
+ "include/storage/schema_version.h")
 
 target_include_directories(storage PUBLIC include)
 

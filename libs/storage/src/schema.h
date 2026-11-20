@@ -1,10 +1,8 @@
 #pragma once
 
-namespace storage {
-	// Database schema version
-	constexpr int kSchemaVersion = 9;
-	constexpr int kMinSupportedVersion = 9;
+#include "storage/schema_version.h" 
 
+namespace storage {
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (
 			id TEXT PRIMARY KEY,
