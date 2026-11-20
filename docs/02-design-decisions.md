@@ -12,7 +12,7 @@ Each entry: decision, then the reason. Revisit only with a migration plan.
 8. **Row keys `sourceId:localId`** keep each imported file's local ids intact while the database stays globally unique.
 9. **Cascade for owned children, RESTRICT for sources/citations.** Deleting a person cleans up everything they own; you cannot delete a source that is still cited.
 10. **Additive-first schema evolution.** `ADD COLUMN`, new tables and indexes are cheap in migration; changing constraints or column types needs a table rebuild, so decide those before real data.
-11. **v8 is the baseline.** No migration from v1-v7 exists or is needed. Migration machinery starts at v8 -> v9.
+11. **v9 is the baseline.** v8 and lower were pre-release drafts whose layout changed while the schema was being built, so the version number was ambiguous. Opening a project below v9 is refused with a clear message ("create a new project"); no migration from them exists or is needed. Migration machinery starts at v9 -> v10. From now on any schema change bumps `kSchemaVersion` and ships with a migration step.
 12. **Attribute-level citations and notes skipped.** Gramps' own SrcAttribute (source/citation) has none either; additive later.
 
 ## Out of scope for v1 (parked)

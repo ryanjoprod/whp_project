@@ -2,7 +2,8 @@
 
 namespace storage {
 	// Database schema version
-	constexpr int kSchemaVersion = 8;
+	constexpr int kSchemaVersion = 9;
+	constexpr int kMinSupportedVersion = 9;
 
 	constexpr const char* kSchemaSql = R"(
 		CREATE TABLE IF NOT EXISTS sources (

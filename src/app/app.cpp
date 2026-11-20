@@ -254,7 +254,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 			for (const auto& r : relationships) db_->save(r, sourceId);
 			for (const auto& a : agents) db_->save(a);
 			for (const auto& e : events) db_->save(e, sourceId);
-			for (const auto& d : documents) db_->save(d);
+			for (const auto& d : documents) db_->save(d, sourceId);
 		});
 		refreshKnownCitations();  // the Windows needs the new citations for labels, Edit and reuse list
 		knownSources_ = db_->loadAllSourceDescriptions();  // the file may have brought new sources with it

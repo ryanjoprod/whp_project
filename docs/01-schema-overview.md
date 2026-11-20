@@ -1,6 +1,6 @@
-# WHP Program - Database Schema Overview (v8, frozen baseline)
+# WHP Program - Database Schema Overview (v9, frozen baseline)
 
-Source of truth: `libs/storage/src/schema.h` (`kSchemaVersion = 8`, run through `exec(kSchemaSql)` in `database.cpp`).
+Source of truth: `libs/storage/src/schema.h` (`kSchemaVersion = 9`, run through `exec(kSchemaSql)` in `database.cpp`).
 `PRAGMA user_version` is set to `kSchemaVersion` when a database is created (table count == 0).
 `PRAGMA foreign_keys = ON` is always set.
 
