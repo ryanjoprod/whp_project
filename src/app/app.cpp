@@ -784,6 +784,9 @@ void App::run() {
 				auto existingA = db_->getAggregateIdForPerson(personA);
 				auto existingB = db_->getAggregateIdForPerson(personB);
 
+				if (existingA && existingB && *existingA != *existingB)
+					db_->mergeAggreates(*existingA, *existingB); // B's whole group joins A's
+
 				std::string aggregateId;
 				if (existingA) aggregateId = *existingA;
 				else if (existingB) aggregateId = *existingB;

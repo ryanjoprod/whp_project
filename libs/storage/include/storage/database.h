@@ -75,6 +75,7 @@ namespace storage {
 		void linkPersons(const std::string& aggregateId, const std::vector<PersonRef>& refs);
 		std::vector<AggregatePerson> loadAggregatePersons();
 		std::optional<std::string> getAggregateIdForPerson(const std::string& personKey);
+		void mergeAggreates(const std::string& keepId, const std::string& absorbId);
 		bool areSamePerson(const std::string& personKeyA, const std::string& personKeyB);
 		std::vector<std::string> getLinkedPersonKeys(const std::string& personKey);
 		bool deletePerson(const std::string& personKey);
@@ -104,8 +105,9 @@ namespace storage {
 		std::vector<gedcomx::Event> loadAllEvents();
 		std::vector<gedcomx::Event> loadEventsForSource(const std::string& sourceId);
 
-		void save(const gedcomx::Document& document);
+		void save(const gedcomx::Document& document, const std::string& sourceId);
 		std::vector<gedcomx::Document> loadAllDocuments();
+		std::vector<gedcomx::Document> loadDocumentsForSource(const std::string& sourceId);
 
 		void save(const gedcomx::PlaceDescription& place);
 		std::vector<gedcomx::PlaceDescription> loadAllPlaces();

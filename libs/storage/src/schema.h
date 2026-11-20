@@ -74,7 +74,7 @@ namespace storage {
 		CREATE TABLE IF NOT EXISTS person_links (
 			person_id TEXT PRIMARY KEY,
 			aggregate_id TEXT NOT NULL,
-			FOREIGN KEY (person_id) REFERENCES person(row_key) ON DELETE CASCADE
+			FOREIGN KEY (person_id) REFERENCES persons(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS person_notes (
@@ -372,13 +372,16 @@ namespace storage {
 		);
 
 		CREATE TABLE IF NOT EXISTS documents (
-			id TEXT PRIMARY KEY,
+			row_key TEXT PRIMARY KEY,
+			local_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
 			type TEXT,
 			text_type TEXT,
-			extracted TEXT,
+			extracted INTEGER,
 			text TEXT,
 			confidence TEXT,
-			lang TEXT
+			lang TEXT,
+			FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE RESTRICT
 		);
 
 		CREATE TABLE IF NOT EXISTS document_notes (
@@ -387,14 +390,14 @@ namespace storage {
 			lang TEXT,
 			subject TEXT,
 			text TEXT,
-			FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+			FOREIGN KEY (document_id) REFERENCES documents(row_key) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS places (
 			id TEXT PRIMARY KEY,
 			type TEXT,
-			latitude TEXT,
-			longitude TEXT,
+			latitude REAL,
+			longitude REAL,
 			code TEXT,
 			confidence TEXT,
 			lang TEXT

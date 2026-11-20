@@ -12,5 +12,6 @@ namespace gedcomx {
 		bool extracted = false;
 		std::string text;
 		Conclusion conclusion;
+		std::string sourceId;  // filled in when loaded from the database
 	};
 }

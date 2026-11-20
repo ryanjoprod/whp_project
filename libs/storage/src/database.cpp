@@ -198,6 +198,16 @@ namespace storage {
 			return result;
 		}
 
+		void mergeAggreagates(const std::string& keepId, const std::string& absorbId) {
+			if (keepId == absorbId) return;
+
+			upsert("UPDATE person_links SET aggregate_id = ? WHERE aggregate_id = ?; ",
+				[&](sqlite3_stmt* s) {
+					bindText(s, 1, keepId);
+					bindText(s, 2, absorbId);
+				});
+		}
+
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey) {
 			std::optional<gedcomx::Person> result;
 
@@ -632,42 +642,57 @@ namespace storage {
 			return results;
 		}
 
-		void save(const gedcomx::Document& doc) {
-			upsert("INSERT INTO documents (id, type, text_type, extracted, text, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?) "
-				"ON CONFLICT(id) "
-				"DO UPDATE SET type = excluded.type, text_type = excluded.text_type, extracted = excluded.extracted, "
-				"text = exluded.text, confidence = excluded.confidence, lang = excluded.lang;",
+		void save(const gedcomx::Document& doc, const std::string& sourceId) {
+			const std::string key = rowKey(sourceId, doc.id);
+			upsert("INSERT INTO documents (row_key, local_id, source_id, type, text_type, extracted, text, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(row_key) "
+				"DO UPDATE SET type = excluded.type, text_type = excluded.text_type, extracted = excluded.extracted, text = excluded.text, confidence = excluded.confidence, lang = excluded.lang;",
 				[&](sqlite3_stmt* s) {
-					bindText(s, 1, doc.id);
-					bindText(s, 2, doc.type);
-					bindText(s, 3, doc.textType);
-					sqlite3_bind_int(s, 4, doc.extracted ? 1 : 0);
-					bindText(s, 5, doc.text);
-					bindText(s, 6, doc.conclusion.confidence);
-					bindText(s, 7, doc.conclusion.lang);
+					bindText(s, 1, key);
+					bindText(s, 2, doc.id);
+					bindText(s, 3, sourceId);
+					bindText(s, 4, doc.type);
+					bindText(s, 5, doc.textType);
+					sqlite3_bind_int(s, 6, doc.extracted ? 1 : 0);
+					bindText(s, 7, doc.text);
+					bindText(s, 8, doc.conclusion.confidence);
+					bindText(s, 9, doc.conclusion.lang);
 				});
 
-			saveNotesFor("document_notes", "document_id", doc.id, doc.conclusion.notes);
+			saveNotesFor("document_notes", "document_id", key, doc.conclusion.notes);
+		}
+
+		gedcomx::Document loadDocumentRow(sqlite3_stmt* s) {
+			gedcomx::Document doc;
+			doc.id = columnText(s, 0);  // the row key
+			doc.sourceId = columnText(s, 2);
+			doc.type = columnText(s, 3);
+			doc.textType = columnText(s, 4);
+			doc.extracted = sqlite3_column_int(s, 5) != 0;
+			doc.text = columnText(s, 6);
+			doc.conclusion.confidence = columnText(s, 7);
+			doc.conclusion.lang = columnText(s, 8);
+			doc.conclusion.notes = loadNotesFor("document_notes", "document_id", doc.id);
+			return doc;
 		}
 
 		std::vector<gedcomx::Document> loadAllDocuments() {
 			std::vector<gedcomx::Document> results;
-
-			query("SELECT id, type, text_type, extracted, text, confidence, lang FROM documents;", {},
+			query(std::string("SELECT ") + kDocumentColumns + " FROM documents ORDER BY row_key;", {},
 				[&](sqlite3_stmt* s) {
-					gedcomx::Document doc;
+					results.push_back(loadDocumentRow(s));
+			});
 
-					doc.id = columnText(s, 0);
-					doc.type = columnText(s, 1);
-					doc.textType = columnText(s, 2);
-					doc.extracted = sqlite3_column_int(s, 3) != 0;
-					doc.text = columnText(s, 4);
-					doc.conclusion.confidence = columnText(s, 5);
-					doc.conclusion.lang = columnText(s, 6);
-					doc.conclusion.notes = loadNotesFor("document_notes", "document_id", doc.id);
+			return results;
+		}
 
-					results.push_back(std::move(doc));
-				});
+		std::vector<gedcomx::Document> loadDocumentsForSource(const std::string& sourceId) {
+			std::vector<gedcomx::Document> results;
+			query(std::string("SELECT ") + kDocumentColumns + " FROM documents WHERE source_id = ? ORDER BY row_key;",
+				{ sourceId },
+				[&](sqlite3_stmt* s) {
+					results.push_back(loadDocumentRow(s));
+			});
 
 			return results;
 		}
@@ -1300,6 +1325,9 @@ namespace storage {
 			return refs;
 		}
 
+
+		static constexpr const char* kDocumentColumns = "row_key, local_id, source_id, type, text_type, extracted, text, confidence, lang";
+
 		// --- date helpers ---
 
 		static constexpr const char* kDateColumns = "date_original, date_formal, date_calendar, date_quality, date_sort";
@@ -1353,6 +1381,10 @@ namespace storage {
 
 	std::vector<storage::AggregatePerson> Database::loadAggregatePersons() {
 		return impl_->loadAggregatePersons();
+	}
+
+	void Database::mergeAggreates(const std::string& keepId, const std::string& absorbId) {
+		impl_->mergeAggreagates(keepId, absorbId);
 	}
 
 	std::optional<gedcomx::Person> Database::loadPerson(const std::string& personKey) {
@@ -1449,12 +1481,16 @@ namespace storage {
 		return impl_->loadEventsForSource(sourceId);
 	}
 	
-	void Database::save(const gedcomx::Document& document) {
-		impl_->save(document);
+	void Database::save(const gedcomx::Document& document, const std::string& sourceId) {
+		impl_->save(document, sourceId);
 	}
 
 	std::vector<gedcomx::Document> Database::loadAllDocuments() {
 		return impl_->loadAllDocuments();
+	}
+
+	std::vector<gedcomx::Document> Database::loadDocumentsForSource(const std::string& sourceId) {
+		return impl_->loadDocumentsForSource(sourceId);
 	}
 
 	void Database::save(const gedcomx::PlaceDescription& place) {
