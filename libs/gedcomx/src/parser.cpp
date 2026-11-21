@@ -454,19 +454,38 @@ namespace gedcomx {
 		PlaceDescription place;
 		place.id = j.value("id", "");
 		place.type = j.value("type", "");
+		place.code = j.value("code", "");  // app extension
 
 		if (j.contains("names")) {
 			for (const auto& n : j.at("names")) {
-				place.names.push_back({ n.value("lang", ""), n.value("value", "") });
+				PlaceName name;
+				name.lang = n.value("lang", "");
+				name.value = n.value("value", "");
+				if (n.contains("date"))
+					name.date = parseDate(n.at("date"));  // app extension
+				place.names.push_back(std::move(name));
 			}
 		}
 
 		if (j.contains("latitude")) place.latitude = j.at("latitude").get<double>();
 		if (j.contains("longitude")) place.longitude = j.at("longitude").get<double>();
 
-		if (j.contains("jurisdiction")) {
+		if (j.contains("jurisdictions")) {  // app extension: several parents, each with the dates it applied
+			for (const auto& pj : j.at("jurisdictions")) {
+				PlaceJurisdiction jur;
+				jur.parentId = stripResourceRef(pj.value("resource", ""));
+				if (pj.contains("date")) jur.date = parseDate(pj.at("date"));
+				if (!jur.parentId.empty()) place.jurisdictions.push_back(std::move(jur));
+			}
+		}
+		else if (j.contains("jurisdiction")) {  // standard GEDCOM X: one undated parent
 			const std::string parent = stripResourceRef(j.at("jurisdiction").value("resource", ""));
 			if (!parent.empty()) place.jurisdictions.push_back({ parent,{} });
+		}
+
+		if (j.contains("urls")) {  // app extension
+			for (const auto& u : j.at("urls"))
+				place.urls.push_back({ u.value("url", ""), u.value("description", ""), u.value("type", "") });
 		}
 
 		place.conclusion = parseConclusion(j);
@@ -517,7 +536,7 @@ namespace gedcomx {
 
 	// Parsing one object at a time can't tell "#X" the source from "#X" the citation. Once the
 	// whole document is parsed, point references that name a citation at that citation.
-	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events, const std::vector<Citation>& citations) {
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events, std::vector<PlaceDescription>& places, const std::vector<Citation>& citations) {
 		std::unordered_set<std::string> ids;
 		for (const auto& c : citations) ids.insert(c.id);
 		if (ids.empty()) return;
@@ -534,6 +553,12 @@ namespace gedcomx {
 			remapRefs(e.conclusion.sources, ids);
 			for (auto& role : e.roles) remapRefs(role.conclusion.sources, ids);
 		}
+		for (auto& pl : places) remapRefs(pl.conclusion.sources, ids);
+	}
+
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events, const std::vector<Citation>& citations) {
+		std::vector<PlaceDescription> none;
+		resolveCitationReferences(persons, relationships, events, none, citations);
 	}
 
 	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations) {
@@ -761,12 +786,89 @@ namespace gedcomx {
 		return j;
 	}
 
+	nlohmann::json serializeCitation(const Citation& c) {
+		nlohmann::json j;
+		j["id"] = c.id;
+		j["componentOf"]["description"] = "#" + c.sourceId;
+
+		if (!c.page.empty()) {
+			nlohmann::json citation;
+			citation["value"] = c.page;
+			j["citations"] = nlohmann::json::array({ citation });
+		}
+		if (!isEmptyDate(c.date)) {
+			nlohmann::json coverage;
+			coverage["temporal"] = serializeDate(c.date);
+			j["coverage"] = nlohmann::json::array({ coverage });
+		}
+
+		if (!c.confidence.empty()) j["confidence"] = c.confidence;  // not a GEDCOM X property; an app extension
+		if (!c.attributes.empty()) j["attributes"] = serializeAttributes(c.attributes);
+		if (!c.notes.empty()) j["notes"] = serializeNotes(c.notes);
+
+		return j;
+	}
+
+	nlohmann::json serializePlaceDescription(const PlaceDescription& place) {
+		nlohmann::json j = serializeConclusion(place.conclusion);
+		j["id"] = place.id;
+		if (!place.type.empty()) j["type"] = place.type;
+		if (!place.code.empty()) j["code"] = place.code;
+
+		if (!place.names.empty()) {
+			nlohmann::json names = nlohmann::json::array();
+			for (const auto& n : place.names) {
+				nlohmann::json nj;
+				if (!n.lang.empty()) nj["lang"] = n.lang;
+				nj["value"] = n.value;
+				if (!isEmptyDate(n.date)) nj["date"] = serializeDate(n.date);
+				names.push_back(nj);
+			}
+			j["names"] = names;
+		}
+
+		if (place.latitude) j["latitude"] = *place.latitude;
+		if (place.longitude) j["longitude"] = *place.longitude;
+
+		if (!place.jurisdictions.empty()) {
+			// The standard member hold the first parentl that is all other programs read.
+			j["jurisdiction"] = { { "resource", "#" + place.jurisdictions[0].parentId } };
+
+			const bool plain = place.jurisdictions.size() == 1 && isEmptyDate(place.jurisdictions[0].date);
+			if (!plain) {
+				nlohmann::json list = nlohmann::json::array();
+				for (const auto& jur : place.jurisdictions) {
+					nlohmann::json pj;
+					pj["resource"] = "#" + jur.parentId;
+					if (!isEmptyDate(jur.date)) pj["date"] = serializeDate(jur.date);
+					list.push_back(pj);
+				}
+				j["jurisdictions"] = list;
+			}
+		}
+
+		if (!place.urls.empty()) {
+			nlohmann::json urls = nlohmann::json::array();
+			for (const auto& u : place.urls) {
+				nlohmann::json uj;
+				uj["url"] = u.url;
+				if (!u.description.empty()) uj["description"] = u.description;
+				if (!u.type.empty()) uj["type"] = u.type;
+				urls.push_back(uj);
+			}
+			j["urls"] = urls;
+		}
+
+		return j;
+	}
+
 	nlohmann::json serializeSourceExport(const gedcomx::SourceDescription& source,
 		const std::vector<gedcomx::Person>& persons,
 		const std::vector<gedcomx::Relationship>& relationships,
 		const std::vector<gedcomx::SourceDescription>& otherSources,
 		const std::vector<gedcomx::Citation>& citations,
-		const std::vector<gedcomx::Event>& events) {
+		const std::vector<gedcomx::Event>& events,
+		const std::vector<gedcomx::PlaceDescription>& places) {
 		nlohmann::json doc;
 
 		doc["sourceDescriptions"] = nlohmann::json::array({ serializeSourceDescription(source) });
@@ -791,29 +893,13 @@ namespace gedcomx {
 			doc["events"] = eventsJson;
 		}
 
+		if (!places.empty()) {
+			nlohmann::json placesJson = nlohmann::json::array();
+			for (const auto& p : places)
+				placesJson.push_back(serializePlaceDescription(p));
+			doc["places"] = placesJson;
+		}
+
 		return doc;
-	}
-
-	nlohmann::json serializeCitation(const Citation& c) {
-		nlohmann::json j;
-		j["id"] = c.id;
-		j["componentOf"]["description"] = "#" + c.sourceId;
-
-		if (!c.page.empty()) {
-			nlohmann::json citation;
-			citation["value"] = c.page;
-			j["citations"] = nlohmann::json::array({ citation });
-		}
-		if (!isEmptyDate(c.date)) {
-			nlohmann::json coverage;
-			coverage["temporal"] = serializeDate(c.date);
-			j["coverage"] = nlohmann::json::array({ coverage });
-		}
-
-		if (!c.confidence.empty()) j["confidence"] = c.confidence;  // not a GEDCOM X property; an app extension
-		if (!c.attributes.empty()) j["attributes"] = serializeAttributes(c.attributes);
-		if (!c.notes.empty()) j["notes"] = serializeNotes(c.notes);
-
-		return j;
 	}
 }

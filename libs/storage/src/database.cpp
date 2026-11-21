@@ -870,11 +870,60 @@ namespace storage {
 				result.events.push_back(std::move(e));
 			}
 
+			// Places the file needs: the ones imported from this source ("<sourceId>:..."), the ones its facts
+			// and events use, and every ancestor of those. Ids are still the database's here.
+			std::set<std::string> wanted;
+			for (const auto& p : result.persons)
+				for (const auto& f : p.facts)
+					if (!f.place.descriptionId.empty())
+						wanted.insert(f.place.descriptionId);
+			for (const auto& r : result.relationships)
+				for (const auto& f : r.facts)
+					if (!f.place.descriptionId.empty())
+						wanted.insert(f.place.descriptionId);
+			for (const auto& e : result.events)
+				if (!e.place.descriptionId.empty())
+					wanted.insert(e.place.descriptionId);
+
+			std::map<std::string, gedcomx::PlaceDescription> placesById;
+			for (auto& p : loadAllPlaces()) {
+				const std::string id = p.id;
+				placesById.emplace(id, std::move(p));
+			}
+
+			const std::string placePrefix = sourceId + ":";
+			for (const auto& entry : placesById)
+				if (entry.first.compare(0, placePrefix.size(), placePrefix) == 0)
+					wanted.insert(entry.first);
+
+			std::vector<std::string> todo(wanted.begin(), wanted.end());
+			while(!todo.empty()) {  // ancestors; the set stops a cycle from looping
+				const std::string id = todo.back();
+				todo.pop_back();
+				auto it = placesById.find(id);
+				if (it == placesById.end()) continue;
+				for (const auto& j : it->second.jurisdictions)
+					if (wanted.insert(j.parentId).second) todo.push_back(j.parentId);
+			}
+
+			for (const auto& id : wanted) {
+				auto it = placesById.find(id);
+				if (it == placesById.end()) continue;  // a fact still names a place that no longer exists
+				gedcomx::PlaceDescription place = std::move(it->second);
+				stripPlacePrefix(sourceId, place.id);
+				for (auto& j : place.jurisdictions) stripPlacePrefix(sourceId, j.parentId);
+				result.places.push_back(std::move(place));
+			}
+
+			// Now the facts and events can use the ids the file knows
 			for (auto& p : result.persons)
-				for (auto& f : p.facts) stripPlacePrefix(sourceId, f.place.descriptionId);
+				for (auto& f : p.facts)
+					stripPlacePrefix(sourceId, f.place.descriptionId);
 			for (auto& r : result.relationships)
-				for (auto& f : r.facts) stripPlacePrefix(sourceId, f.place.descriptionId);
-			for (auto& e : result.events) stripPlacePrefix(sourceId, e.place.descriptionId);
+				for (auto& f : r.facts)
+					stripPlacePrefix(sourceId, f.place.descriptionId);
+			for (auto& e : result.events)
+				stripPlacePrefix(sourceId, e.place.descriptionId);
 
 			for (auto& c : loadCitationsForSource(sourceId)) {
 				if (gedcomx::isBare(c)) continue;
@@ -911,6 +960,9 @@ namespace storage {
 				for (const auto& r : e.roles)
 					noteRefs(r.conclusion.sources);
 			}
+
+			for (const auto& pl : result.places)
+				noteRefs(pl.conclusion.sources);
 
 			if (!otherSourceIds.empty()) {
 				for (auto& s : loadAllSourceDescriptions()) {

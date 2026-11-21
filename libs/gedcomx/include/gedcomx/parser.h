@@ -43,9 +43,10 @@ namespace gedcomx {
 	std::vector<PlaceDescription> parsePlaceDescriptions(const nlohmann::json& document);
 
 	std::vector<Citation> parseCitations(const nlohmann::json& document);
+	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships,
+		std::vector<Event>& events, std::vector<PlaceDescription>& places, const std::vector<Citation>& citations);
 	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events, const std::vector<Citation>& citations);
 	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations);
-	nlohmann::json serializeCitation(const gedcomx::Citation& citation);
 
 	// Gives every place and agent in a file an id that cannot collide with another file's ("sourceId:fileId")
 	// and updates references to them: parent places, and the place on every fact and event.
@@ -67,6 +68,9 @@ namespace gedcomx {
 		const std::vector<gedcomx::Relationship>& relationships,
 		const std::vector<gedcomx::SourceDescription>& otherSources = {},
 		const std::vector<gedcomx::Citation>& citations = {},
-		const std::vector<gedcomx::Event>& events = {}
+		const std::vector<gedcomx::Event>& events = {},
+		const std::vector<gedcomx::PlaceDescription>& places = {}
 	);
+	nlohmann::json serializeCitation(const gedcomx::Citation& citation);
+	nlohmann::json serializePlaceDescription(const PlaceDescription& place);
 }

@@ -234,7 +234,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 	auto places = gedcomx::parsePlaceDescriptions(document);
 	auto citations = gedcomx::parseCitations(document);
 
-	gedcomx::resolveCitationReferences(people, relationships, events, citations);
+	gedcomx::resolveCitationReferences(people, relationships, events, places, citations);
 
 	if (sourceDescriptions.empty()) {
 		Logger::log(LogLevel::Error, "Import rejected: file has no SourceDescription: " + pathToLoad);
@@ -252,6 +252,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 				db_->ensureBareCitation(s.id);
 			}
 			for (const auto& c : citations) db_->importCitations(c);
+			for (const auto& p : places) db_->save(p);  // after citations: a place can cite them
 			for (const auto& p : people) db_->save(p, sourceId);
 			for (const auto& r : relationships) db_->save(r, sourceId);
 			for (const auto& a : agents) db_->save(a);
@@ -755,7 +756,7 @@ void App::run() {
 				}
 				else {
 					auto exportData = db_->gatherSourceExport(pendingExportSourceId_);
-					nlohmann::json doc = gedcomx::serializeSourceExport(*it, exportData.persons, exportData.relationships, exportData.otherSources, exportData.citations, exportData.events);
+					nlohmann::json doc = gedcomx::serializeSourceExport(*it, exportData.persons, exportData.relationships, exportData.otherSources, exportData.citations, exportData.events, exportData.places);
 
 					std::ofstream out(*savePath);
 					out << doc.dump(2);

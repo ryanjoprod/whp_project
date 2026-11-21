@@ -48,6 +48,7 @@ namespace storage {
 		std::vector<gedcomx::SourceDescription> otherSources;  // other sources the export cites,so the files is self-contained
 		std::vector<gedcomx::Citation> citations;  // real citations only; bare ones are just "#S1" on a reference
 		std::vector<gedcomx::Event> events;
+		std::vector<gedcomx::PlaceDescription> places;  // used by this souce, with their ancestors; ids as the file knows them
 	};
 
 	struct Reference {

@@ -23,6 +23,7 @@ add_executable(whp_tests
 	storage/test_schema_version.cpp
 	storage/test_migrations.cpp
 	storage/test_place_import.cpp
+	gedcomx/test_place_serializer.cpp
 )
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
