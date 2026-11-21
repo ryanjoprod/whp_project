@@ -14,6 +14,7 @@
 #include "gedcomx/document.h"
 #include "gedcomx/place_description.h"
 #include "gedcomx/citation.h"
+#include "storage/migrations.h"
 
 namespace storage {
 	// Strips a known sourceId prefix off a row-key to recover the bare local id
@@ -59,6 +60,7 @@ namespace storage {
 	class Database {
 	public:
 		explicit Database(const std::string& path);
+		explicit Database(const std::string& path, const MigrationPlan& plan);
 		~Database();
 
 		// Non-copyable: this class owns a raw sqlite3* handle.

@@ -20,6 +20,7 @@ add_executable(whp_tests
 	storage/test_references_storage.cpp
 	storage/test_document_storage.cpp
 	storage/test_schema_version.cpp
+	storage/test_migrations.cpp
 )
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -7,11 +7,13 @@
 #include <memory>
 #include <set>
 #include <algorithm>
+#include <filesystem>
 
 namespace storage {
 	class Database::Impl {
 	public:
-		explicit Impl(const std::string& path) {
+		explicit Impl(const std::string& path, const MigrationPlan& plan)
+			: path_(path), plan_(plan) {
 			if (sqlite3_open(path.c_str(), &db_) != SQLITE_OK) {
 				throw std::runtime_error("Failed to open database: " + path);
 			}
@@ -1050,20 +1052,22 @@ namespace storage {
 						columnText(s, 4) });
 				});
 
-			query("SELECT place_id, citation_id FROM place_citations WHERE " + filter("citation_id") + ";", { value },
-				[&](sqlite3_stmt* s) {
-					out.push_back({ "Place", columnText(s, 0), placeLabel(columnText(s, 0)), columnText(s, 1) });
-				});
+				query("SELECT place_id, citation_id FROM place_citations WHERE " + filter("citation_id") + ";", { value },
+					[&](sqlite3_stmt* s) {
+						out.push_back({ "Place", columnText(s, 0), placeLabel(columnText(s, 0)), columnText(s, 1) });
+					});
 
-			std::sort(out.begin(), out.end(), [](const Reference& a, const Reference& b) {
-				return a.kind != b.kind ? a.kind < b.kind : a.label < b.label;
-			});
+				std::sort(out.begin(), out.end(), [](const Reference& a, const Reference& b) {
+					return a.kind != b.kind ? a.kind < b.kind : a.label < b.label;
+					});
 
-			return out;
+				return out;
 		}
 
 	private:
 		sqlite3* db_ = nullptr;
+		std::string path_;
+		MigrationPlan plan_;
 
 		// Rolls back automatically if an exception skips commit()
 		struct Transaction {
@@ -1107,23 +1111,96 @@ namespace storage {
 
 			query("PRAGMA user_version;", {}, [&](sqlite3_stmt* s) {
 				version = sqlite3_column_int(s, 0);
-			});
+				});
 			query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';", {},
 				[&](sqlite3_stmt* s) {
 					tableCount = sqlite3_column_int(s, 0);
-			});
+				});
 
 			if (tableCount > 0 && version < kMinSupportedVersion) {
 				throw std::runtime_error("This project was created by a pre-release build (database v" + std::to_string(version) + ") and cannot be opened. Please create a new project and re-import your files.");
 			}
 
-			if (tableCount > 0 && version > kSchemaVersion) {
+			if (tableCount > 0 && version > plan_.targetVersion) {
 				throw std::runtime_error("This project was created by a newer version of WHP (database v" + std::to_string(version) + "). Please update the program.");
 			}
 
-			// later: if (tableCount > 0 && version < kSchemaVersion) runMigrations(version);
+			if (tableCount > 0 && version < plan_.targetVersion) runMigrations(version);
+
 			createSchema();
-			if (tableCount == 0) exec("PRAGMA user_version = " + std::to_string(kSchemaVersion) + ";");
+			if (tableCount == 0) exec("PRAGMA user_version = " + std::to_string(plan_.targetVersion) + ";");
+		}
+
+		void runMigrations(int from) {
+			// 1. Check the whole path exists before touching the file
+			std::vector<const Migration*> path;
+			for (int v = from + 1; v <= plan_.targetVersion; ++v) {
+				auto it = std::find_if(plan_.steps.begin(), plan_.steps.end(),
+					[&](const Migration& m) {
+						return m.toVersion == v;
+					});
+				if (it == plan_.steps.end()) {
+					throw std::runtime_error("No upgrade path from database v" + std::to_string(from) +
+						" to v" + std::to_string(plan_.targetVersion) + " (missing the step to v" + std::to_string(v) + ").");
+				}
+				path.push_back(&*it);
+			}
+
+			// 2. Back up the project before the first change
+			const std::string backup = backupBeforeUpgrade(from);
+
+			// 3. One transaction per step
+			for (const Migration* m : path) {
+				try {
+					runStep(*m);
+				}
+				catch (const std::exception& e) {
+					throw std::runtime_error("Upgrade to database v" + std::to_string(m->toVersion) + " failed: " + e.what() +
+						(backup.empty() ? "" : ". Your original project was backed up at " + backup));
+				}
+			}
+		}
+
+		std::string backupBeforeUpgrade(int from) {
+			if (path_.empty() || path_ == ":memory:") return "";
+
+			const std::string target = path_ + ".v" + std::to_string(from) + ".bak";
+			std::filesystem::remove(target);  // VACUUM INTO refuses to overwrite a file
+
+			std::string quoted;
+			for (char c : target) {
+				if (c == '\'') quoted += '\'';
+				quoted += c;
+			}
+			exec("VACUUM INTO '" + quoted + "';");  // a consistent copy of the open database
+			return target;
+		}
+
+		void runStep(const Migration& m) {
+			// This pragma does nothing inside a transaction, so it must come first.
+			if (m.needsForeignKeysOff) exec("PRAGMA foreign_keys = OFF;");
+			try {
+				{
+					Transaction tx(*this);
+					m.apply([this](const std::string& sql) { exec(sql); });
+					exec("PRAGMA user_version = " + std::to_string(m.toVersion) + ";");  // rolls back with the step
+
+					if (m.needsForeignKeysOff) {
+						bool violation = false;
+						query("PRAGMA foreign_key_check;", {},
+							[&](sqlite3_stmt* s) {
+								violation = true;
+						});
+						if (violation) throw std::runtime_error("the step left rows that break a foreign key");
+					}
+					tx.commit();
+				}
+			}
+			catch (...) {
+				if (m.needsForeignKeysOff) exec("PRAGMA foreign_keys = ON;");
+				throw;
+			}
+			if (m.needsForeignKeysOff) exec("PRAGMA foreign_keys = ON;");
 		}
 
 		void createSchema() {
@@ -1372,8 +1449,9 @@ namespace storage {
 	// --- Database: thin forward wrapper around Impl ---
 
 	Database::Database(const std::string& path)
-		: impl_(std::make_unique<Impl>(path)) {
-	}
+		: impl_(std::make_unique<Impl>(path, defaultMigrationPlan())) {}
+	Database::Database(const std::string& path, const MigrationPlan& plan)
+		: impl_(std::make_unique<Impl>(path, plan)) {}
 
 	Database::~Database() = default;  // must be defined here, where Impl is complete
 
