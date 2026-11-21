@@ -746,6 +746,20 @@ namespace storage {
 					});
 			}
 
+			// A place must never be its own ancestor. Walk up from its parents; if we meet the place, refuse.
+			int loops = 0;
+			query("WITH RECURSIVE ancestors(id) AS ("
+				"SELECT parent_id FROM place_jurisdictions WHERE place_id = ? "
+				"UNION "
+				"SELECT pj.parent_id FROM place_jurisdictions pj JOIN ancestors a ON pj.place_id = a.id"
+				") SELECT COUNT(*) FROM ancestors WHERE id = ?;",
+				{ place.id, place.id },
+				[&](sqlite3_stmt* s) {
+					loops = sqlite3_column_int(s, 0);
+			});
+			if (loops > 0)
+				throw std::runtime_error("Place " + place.id + " would becomes its own ancestor.");
+
 			exec("DELETE FROM place_urls WHERE place_id = ?;", { place.id });
 			for (const auto& u : place.urls) {
 				upsert("INSERT INTO place_urls (place_id, url, description, type) VALUES (?, ?, ?, ?);",

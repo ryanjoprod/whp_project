@@ -7,6 +7,16 @@
 #include "gedcomx/place_description.h"
 #include "gedcomx/citation.h"
 
+namespace {
+	gedcomx::PlaceDescription makePlaceWithParent(const std::string& id, const std::string& parentId) {
+		gedcomx::PlaceDescription p;
+		p.id = id;
+		if (!parentId.empty())
+			p.jurisdictions.push_back({ parentId,{} });
+		return p;
+	}
+}
+
 TEST_CASE("Top-level places save with no jurisdiction") {
 	storage::Database db(":memory:");
 
@@ -137,4 +147,51 @@ TEST_CASE("Re-saving a place replaces its names, parents and URLs") {
 		CHECK(place.jurisdictions.empty());
 		CHECK(place.urls.empty());
 	}
+}
+
+TEST_CASE("A place cannot be its own parent") {
+	storage::Database db(":memory:");
+	CHECK_THROWS(db.save(makePlaceWithParent("PL1", "PL1")));
+}
+
+TEST_CASE("A place cannot become an ancestor of its own ancestor") {
+	storage::Database db(":memory:");
+	db.save(makePlaceWithParent("PL1", ""));
+	db.save(makePlaceWithParent("PL2", "PL1"));
+	db.save(makePlaceWithParent("PL3", "PL2"));
+
+	// PL1 under PL3 would close the loo PL1 -> PL3 -> PL2 -> PL1
+	CHECK_THROWS(db.save(makePlaceWithParent("PL1", "PL3")));
+}
+
+TEST_CASE("A refused place leaves the old hierarchy intact") {
+	storage::Database db(":memory:");
+	db.save(makePlaceWithParent("PL1", ""));
+	db.save(makePlaceWithParent("PL2", "PL1"));
+
+	CHECK_THROWS(db.save(makePlaceWithParent("PL1", "PL2")));
+
+	auto places = db.loadAllPlaces();
+	for (const auto& p : places) {
+		if (p.id == "PL1")
+			CHECK(p.jurisdictions.empty());
+	}
+}
+
+TEST_CASE("A cycle built across two saves in one transaction is refused") {
+	storage::Database db(":memory:");
+
+	CHECK_THROWS(db.runInTransaction([&] {
+		db.save(makePlaceWithParent("PL1", "PL2"));  // PL2 does not exist yet; allowed until commit
+		db.save(makePlaceWithParent("PL2", "PL1"));  // this one closes the loop
+	}));
+	CHECK(db.loadAllPlaces().empty());  // the whole transaction rolled back
+}
+
+TEST_CASE("Two places that share a parent are not a cycle") {
+	storage::Database db(":memory:");
+	db.save(makePlaceWithParent("PL1", ""));
+	db.save(makePlaceWithParent("PL2", "PL1"));
+	CHECK_NOTHROW(db.save(makePlaceWithParent("PL3", "PL1")));
+	CHECK_NOTHROW(db.save(makePlaceWithParent("PL4", "PL2")));  // a deeper, normal chain
 }

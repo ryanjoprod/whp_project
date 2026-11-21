@@ -9,9 +9,18 @@ Everything inside a SQL string compiles. Real bugs found so far, so check these 
 - Missing spaces where string pieces are concatenated (`...FROM` glued to the previous word).
 - `ON CONFLICT(x)` naming a column that is not the key any more.
 - Typos in `excluded.` (`exluded`).
+- Wrong JSON key in a parser branch (`jurisdiction` vs `jurisdictions`): the branch silently reads nothing.
 - SQLite does not validate `REFERENCES` target names at `CREATE TABLE` time; the error appears when a statement first touches the table.
 - Forgetting `return` in a forwarder (C4716). Build with `/we4715 /we4716` (MSVC) or `-Werror=return-type` to make it an error.
 - Forwarders on `Database::` need the `Database::` prefix or `impl_` is undefined; header and `.cpp` signatures must match.
+
+## C++ pitfalls seen in this project
+
+- `for (auto x : items)` COPIES; if the loop modifies `x`, the change is lost. Use `auto&` (or `const auto&` to read without copying).
+- A constructor that throws never runs its destructor: release resources (the SQLite handle) in a catch block inside the constructor.
+- Put only DECLARATIONS in headers; bodies that use `Impl` belong in the `.cpp` (a constructor body pasted into the header gave C2535).
+- A second copy of a declaration, or a comparison turned around (`<` for `>`), compiles fine and fails only in a test; every guard needs a test for both directions.
+- Names inside `namespace storage { }` in a shared header must be inside that namespace too.
 
 ## Quick schema check
 

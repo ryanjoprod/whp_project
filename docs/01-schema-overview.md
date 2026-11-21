@@ -20,7 +20,7 @@ Source of truth: `libs/storage/src/schema.h` (`kSchemaVersion = 9`, run through 
 ## Id schemes
 
 - **Row keys (`sourceId:localId`)**: persons, relationships, events, documents, and their owned children. The table has `row_key` (PK), `local_id`, `source_id`. `save()` takes LOCAL ids plus the source id; loads return ROW KEYS in `id` and fill `sourceId`. Exports strip prefixes with `storage::stripRowKeyPrefix`.
-- **Global ids**: sources, citations, places, agents. Ids from files can collide, so import must remap them (see import/export doc).
+- **Global ids**: sources, citations, places, agents. Places and agents imported from a file are remapped to `<sourceId>:<fileId>` so files cannot collide (see import/export doc); sources and citations keep their own ids.
 - Events and documents are source-scoped (`source_id NOT NULL`, FK to `sources` RESTRICT). Event roles reference persons by row key and must be in the same source; a dangling role fails the import and rolls back.
 
 ## Foreign key policy
@@ -42,7 +42,7 @@ Columns: `date_original`, `date_formal`, `date_calendar`, `date_quality`, `date_
 
 ## Places
 
-`places(id, type, latitude REAL, longitude REAL, code, confidence, lang)`; dated `place_names`; hierarchy through `place_jurisdictions(place_id, parent_id, date...)`; `place_urls`. A place `title` is derived, not stored.
+`places(id, type, latitude REAL, longitude REAL, code, confidence, lang)`; dated `place_names`; hierarchy through `place_jurisdictions(place_id, parent_id, date...)`; `place_urls`. A place `title` is derived, not stored. Place and agent ids are `<sourceId>:<fileId>` when imported (generated ids when made in the app). A place can never be its own ancestor: `save(PlaceDescription)` refuses a cycle (see the import/export doc).
 
 ## Attributes
 
