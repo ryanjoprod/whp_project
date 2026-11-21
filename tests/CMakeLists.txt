@@ -11,6 +11,7 @@ add_executable(whp_tests
 	gedcomx/test_source_export.cpp
 	gedcomx/test_parent_child.cpp
 	gedcomx/test_event_serializer.cpp
+	gedcomx/test_place_remap.cpp
 	storage/test_person_storage.cpp
 	storage/test_aggregate_storage.cpp
 	storage/test_relationship_storage.cpp
@@ -21,6 +22,7 @@ add_executable(whp_tests
 	storage/test_document_storage.cpp
 	storage/test_schema_version.cpp
 	storage/test_migrations.cpp
+	storage/test_place_import.cpp
 )
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

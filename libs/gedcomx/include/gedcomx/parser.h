@@ -47,6 +47,12 @@ namespace gedcomx {
 	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations);
 	nlohmann::json serializeCitation(const gedcomx::Citation& citation);
 
+	// Gives every place and agent in a file an id that cannot collide with another file's ("sourceId:fileId")
+	// and updates references to them: parent places, and the place on every fact and event.
+	// A reference to a place that is not in the file is cleared ( the oroiginal text stays).
+	// Call it once per import, after parsing.
+	void remapPlaceAndAgentIds(const std::string& sourceId, std::vector<PlaceDescription>& places, std::vector<Agent>& agents, std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events);
+
 	// --- Serializers ---
 
 	nlohmann::json serializeConclusion(const gedcomx::Conclusion& conclusion);

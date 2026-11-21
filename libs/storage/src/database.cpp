@@ -870,6 +870,12 @@ namespace storage {
 				result.events.push_back(std::move(e));
 			}
 
+			for (auto& p : result.persons)
+				for (auto& f : p.facts) stripPlacePrefix(sourceId, f.place.descriptionId);
+			for (auto& r : result.relationships)
+				for (auto& f : r.facts) stripPlacePrefix(sourceId, f.place.descriptionId);
+			for (auto& e : result.events) stripPlacePrefix(sourceId, e.place.descriptionId);
+
 			for (auto& c : loadCitationsForSource(sourceId)) {
 				if (gedcomx::isBare(c)) continue;
 				citationIds.insert(c.id);
@@ -1104,6 +1110,14 @@ namespace storage {
 
 		static std::string stripSourcePrefix(const std::string& key, const std::string& sourceId) {
 			return key.substr(sourceId.size() + 1);
+		}
+
+		// A place imported from this source is stored as "<sourceId>:PL1"; the file knows it as "PL1".
+		// Ids that belong to another source (or were created in the app) stay as they are.
+		static void stripPlacePrefix(const std::string& sourceId, std::string& id) {
+			const std::string prefix = sourceId + ":";
+			if (id.compare(0, prefix.size(), prefix) == 0)
+				id.erase(0, prefix.size());
 		}
 
 		void ensureSchemaVersion() {

@@ -242,6 +242,8 @@ std::string App::loadSourceFile(const std::string& filePath) {
 	}
 	const std::string sourceId = sourceDescriptions[0].id;
 
+	gedcomx::remapPlaceAndAgentIds(sourceId, places, agents, people, relationships, events);
+
 	try {
 		db_->runInTransaction([&] {
 			for (const auto& p : places) db_->save(p);

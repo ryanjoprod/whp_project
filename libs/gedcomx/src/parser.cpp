@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <algorithm>
 
 namespace {
 	// GEDCOM X references look like "#P1" - the '#' means "local id in this
@@ -538,6 +539,45 @@ namespace gedcomx {
 	void resolveCitationReferences(std::vector<Person>& persons, std::vector<Relationship>& relationships, const std::vector<Citation>& citations) {
 		std::vector<Event> none;
 		resolveCitationReferences(persons, relationships, none, citations);
+	}
+
+	void remapPlaceAndAgentIds(const std::string& sourceId, std::vector<PlaceDescription>& places, std::vector<Agent>& agents, std::vector<Person>& persons, std::vector<Relationship>& relationships, std::vector<Event>& events) {
+		auto scoped = [&](const std::string& id) {
+			return sourceId + ":" + id;
+			};
+
+		std::unordered_set<std::string> placeIds;  // the ids the file deines, before anything is renamed
+		for (const auto& p : places) placeIds.insert(p.id);
+
+		// Known place: prefixed. Unknown place: cleared (the original text stays on the fact).
+		auto remapPlaceRef = [&](std::string& id) {
+			if (id.empty()) return;
+			if (placeIds.count(id)) id = scoped(id);
+			else id.clear();
+		};
+
+		for (auto& place : places) {
+			place.id = scoped(place.id);
+			for (auto& j : place.jurisdictions) remapPlaceRef(j.parentId);
+			// a parent the file does not define is dropped: the table's foreign key would reject it
+			place.jurisdictions.erase(
+				std::remove_if(place.jurisdictions.begin(), place.jurisdictions.end(),
+					[](const PlaceJurisdiction& j) {
+						return j.parentId.empty();
+					}),
+				place.jurisdictions.end()
+			);
+		}
+
+		// Nothing references agents yet. When a reference to one is added (a source's repository, say),
+		// remap it here too.
+		for (auto& a : agents) a.id = scoped(a.id);
+
+		for (auto& p : persons)
+			for (auto& f : p.facts) remapPlaceRef(f.place.descriptionId);
+		for (auto& r : relationships)
+			for (auto& f : r.facts) remapPlaceRef(f.place.descriptionId);
+		for (auto& e : events) remapPlaceRef(e.place.descriptionId);
 	}
 
 	// --- Serializers ---
