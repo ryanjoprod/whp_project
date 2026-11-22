@@ -19,6 +19,7 @@
 #include "storage/database.h"
 #include "gedcomx/parent_child.h"
 #include "gedcomx/citation.h"
+#include "gedcomx/date_parts.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -367,6 +368,8 @@ private:
 	gedcomx::Citation workingCitation_;  // empty id = a new citation
 	char citationPageBuffer_[256] = "";
 	char citationDateBuffer_[128] = "";
+	gedcomx::Date citationDate_;  // the structure date; the buffer above is just what the text box shows
+
 	std::vector<EditableNote> citationNotes_;
 	std::optional<gedcomx::Citation> citationSaveResults_;
 
@@ -475,4 +478,20 @@ private:
 	std::vector<storage::Reference> citationReferences_;
 	std::string citationReferencesFor_;
 	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
+
+	// --- Date Editor (one popup, opened from any date field) ---
+	enum class DateEditorTarget { None, Citation };
+
+	DateEditorTarget dateEditorTarget_ = DateEditorTarget::None;
+	bool showDateEditor_ = false;
+	int dateKindIndex_ = 0;  // same order as gedcomx::DateKind
+	int dateCalendarIndex_ = 0;
+	int dateQualityIndex_ = 0;
+	gedcomx::SimpleDate dateStart_;
+	gedcomx::SimpleDate dateStop_;
+	char dateTextBuffer_[256] = "";
+
+	void openDateEditor(DateEditorTarget target, const gedcomx::Date& initial);
+	std::optional<gedcomx::Date> renderDateEditor(DateEditorTarget target);  // the new date on the frame OK is pressed
+	gedcomx::DateParts dateEditorParts() const;
 };

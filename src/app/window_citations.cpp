@@ -83,14 +83,16 @@ void Window::renderCitationRefs(CitationEditorOwner owner, std::vector<gedcomx::
 
 void Window::startNewCitationForm() {
 	workingCitation_ = gedcomx::Citation{};
+	citationDate_ = gedcomx::Date{};
 	citationPageBuffer_[0] = citationDateBuffer_[0] = '\0';
 	citationConfidenceIndex_ = 0;
 }
 
 void Window::fillCitationForm(const gedcomx::Citation& c) {
-	workingCitation_ = c;  //keeps the id, and the formal date we don't edit yet
+	workingCitation_ = c;
 	strncpy_s(citationPageBuffer_, c.page.c_str(), sizeof(citationPageBuffer_) - 1);
 	strncpy_s(citationDateBuffer_, c.date.original.c_str(), sizeof(citationDateBuffer_) - 1);
+	citationDate_ = c.date;  // the whole date, with its formal form, calendar and sort value
 
 	citationConfidenceIndex_ = 0;
 	for (int i = 0; i < IM_ARRAYSIZE(kCitationConfidence); ++i)
@@ -300,7 +302,19 @@ void Window::renderCitationEditor(CitationEditorOwner owner, const std::vector<g
 			ImGui::TextDisabled("Leave the details blank to cite the whole source.");
 
 		ImGui::InputText("Volume/Page", citationPageBuffer_, sizeof(citationPageBuffer_));
-		ImGui::InputText("Date", citationDateBuffer_, sizeof(citationDateBuffer_));
+		
+		// the words can be typed (a text-only date); "..." opens the Date editor for the structured form
+		ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 36.0f);
+		if (ImGui::InputText("##citationDate", citationDateBuffer_, sizeof(citationDateBuffer_))) {
+			gedcomx::DateParts typed;
+			typed.kind = gedcomx::DateKind::TextOnly;
+			typed.text = citationDateBuffer_;
+			citationDate_ = gedcomx::toDate(typed);
+		}
+		ImGui::SameLine(0.0f, 4.0f);
+		if (ImGui::Button("...##citationDate")) openDateEditor(DateEditorTarget::Citation, citationDate_);
+		ImGui::SameLine();
+		ImGui::TextUnformatted("Date");
 
 		std::string confPreview = citationConfidenceIndex_ == 0 ? "(none)" : gedcomx::formatTypeUri(kCitationConfidence[citationConfidenceIndex_]);
 		if (ImGui::BeginCombo("Confidence", confPreview.c_str())) {
@@ -337,7 +351,7 @@ void Window::renderCitationEditor(CitationEditorOwner owner, const std::vector<g
 			gedcomx::Citation c = workingCitation_;  // keeps the id when editing, and the formal date
 			c.sourceId = knownSources[citationSourceIndex_].id;
 			c.page = citationPageBuffer_;
-			c.date.original = citationDateBuffer_;
+			c.date = citationDate_;
 			c.confidence = kCitationConfidence[citationConfidenceIndex_];
 			c.notes = collectNotes(citationNotes_);
 			c.attributes = collectAttributes(citationAttributes_);
@@ -370,6 +384,13 @@ void Window::renderCitationEditor(CitationEditorOwner owner, const std::vector<g
 			showCitationEditor_ = false;
 			ImGui::CloseCurrentPopup();
 		}
+
+		if (auto picked = renderDateEditor(DateEditorTarget::Citation)) {
+			citationDate_ = *picked;
+			citationDateBuffer_[0] = '\0';
+			strncpy_s(citationDateBuffer_, picked->original.c_str(), sizeof(citationDate_) - 1);
+		}
+
 		ImGui::EndPopup();
 	}
 
