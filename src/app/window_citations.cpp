@@ -388,7 +388,7 @@ void Window::renderCitationEditor(CitationEditorOwner owner, const std::vector<g
 		if (auto picked = renderDateEditor(DateEditorTarget::Citation)) {
 			citationDate_ = *picked;
 			citationDateBuffer_[0] = '\0';
-			strncpy_s(citationDateBuffer_, picked->original.c_str(), sizeof(citationDate_) - 1);
+			strncpy_s(citationDateBuffer_, picked->original.c_str(), sizeof(citationDateBuffer_) - 1);
 		}
 
 		ImGui::EndPopup();
