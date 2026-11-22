@@ -4,6 +4,7 @@ add_library(gedcomx STATIC
 	src/gedcomx.cpp
 	src/parser.cpp
 	src/parent_child.cpp
+	src/date_parts.cpp
 )
 
 target_include_directories(gedcomx PUBLIC include)
