@@ -90,6 +90,12 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
             if (ImGui::MenuItem("New Relationship...")) {
                 requestNewRelationshipEditor();
             }
+            if (ImGui::MenuItem("New Place...")) {
+                requestNewPlaceEditor();
+            }
+            if (ImGui::MenuItem("Places...")) {
+                requestPlaceList();
+            }
             ImGui::EndDisabled();
             ImGui::EndMenu();
         }

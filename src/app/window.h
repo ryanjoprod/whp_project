@@ -20,6 +20,7 @@
 #include "gedcomx/parent_child.h"
 #include "gedcomx/citation.h"
 #include "gedcomx/date_parts.h"
+#include "gedcomx/place_logic.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -41,6 +42,25 @@ struct EditableAttribute {
 	std::string id;  // kept as loaded; new rows get one when collected
 	char type[128] = "";
 	char value[256] = "";
+};
+
+struct EditablePlaceName {
+	char value[256] = "";
+	char lang[16] = "";
+	gedcomx::Date date;
+	char dateText[128] = "";
+};
+
+struct EditablePlaceParent {
+	std::string parentId;
+	gedcomx::Date date;
+	char dateText[128] = "";
+};
+
+struct EditablePlaceUrl {
+	char url[512] = "";
+	char description[256] = "";
+	char type[64] = "";
 };
 
 class Window {
@@ -142,7 +162,6 @@ public:
 	void requestNewRelationshipEditor();
 	void requestEditRelationshipEditor(const gedcomx::Relationship& relationship, const gedcomx::Person& person1, const gedcomx::Person& person2);
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
-	// std::optional<std::pair<gedcomx::Relationship, std::string>> consumeRelationshipEditResult();
 	struct ExistingChild {
 		gedcomx::Person child;
 		std::optional<gedcomx::Relationship> link[2];  // [0] = from Person 1, [1] = from Person 2
@@ -199,6 +218,12 @@ public:
 		return request;
 	}
 	void setReferences(ReferencesKind kind, const std::string& id, std::vector<storage::Reference> refs);
+
+	// Places
+	void setKnownPlaces(const std::vector<gedcomx::PlaceDescription>& places);
+	void requestPlaceList() { showPlaceList_ = true; }
+	void requestNewPlaceEditor() { openPlaceEditor(PlaceEditorOwner::App, nullptr); }
+	std::optional<gedcomx::PlaceDescription> consumePlaceSave();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -480,7 +505,7 @@ private:
 	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
 
 	// --- Date Editor (one popup, opened from any date field) ---
-	enum class DateEditorTarget { None, Citation };
+	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent };
 
 	DateEditorTarget dateEditorTarget_ = DateEditorTarget::None;
 	bool showDateEditor_ = false;
@@ -494,4 +519,42 @@ private:
 	void openDateEditor(DateEditorTarget target, const gedcomx::Date& initial);
 	std::optional<gedcomx::Date> renderDateEditor(DateEditorTarget target);  // the new date on the frame OK is pressed
 	gedcomx::DateParts dateEditorParts() const;
+
+	// --- Place List and Place Editor ---
+	enum class PlaceEditorOwner { None, App, List };
+
+	std::vector<gedcomx::PlaceDescription> knownPlaces_;  // pushed by App
+	gedcomx::PlaceIndex placeIndex_;  // points into knownPlaces_; rebuilt whenever that changes
+	std::vector<std::pair<std::string, std::string>> placePickList_;  // (title, id), sorted by title
+
+	bool showPlaceList_ = false;
+	char placeFilterBuffer_[128] = "";
+	std::string selectedPlaceId_;
+
+	PlaceEditorOwner placeEditorOwner_ = PlaceEditorOwner::None;
+	bool showPlaceEditor_ = false;
+	gedcomx::PlaceDescription workingPlace_;  // empty id = a new place; keeps what the editor does not show
+	std::optional<gedcomx::PlaceDescription> placeSaveResult_;
+	std::vector<EditablePlaceName> placeNames_;
+	std::vector<EditablePlaceParent> placeParents_;
+	std::vector<EditablePlaceUrl> placeUrls_;
+	std::vector<EditableNote> placeNotes_;
+	char placeTypeBuffer_[64] = "";
+	char placeCodeBuffer_[64] = "";
+	char placeLatBuffer_[32] = "";
+	char placeLonBuffer_[32] = "";
+	char placeParentFilterBuffer_[64] = "";
+	std::unordered_set<std::string> placeParentExcluded_;  // the place itself and everything below it
+	int placeDateRow_ = -1;  // the row whose "..." opened the Date editor
+
+	void openPlaceEditor(PlaceEditorOwner owner, const gedcomx::PlaceDescription* existing);
+	void renderPlaceEditor(PlaceEditorOwner owner);
+	void renderPlaceList();
+	void renderPlaceNamesTab();
+	void renderPlaceLocationTab();
+	void renderPlaceParentsTab();
+	void renderPlaceLinksTab();
+	std::string collectPlace(gedcomx::PlaceDescription& out) const;  // first problem, or "" when out can be saved
+	std::string placeTitleById(const std::string& id) const;
+	static bool renderDateInput(const char* id, gedcomx::Date& date, char* buffer, size_t bufferSize, float width);
 };

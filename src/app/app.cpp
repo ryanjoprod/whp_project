@@ -65,6 +65,7 @@ void App::openProject(const std::string& whoprojPath) {
 
 	knownSources_ = db_->loadAllSourceDescriptions();
 	refreshKnownCitations();
+	refreshKnownPlaces();
 
 	neighborhoodDepth_ = currentProject_->settings.neighborhoodDepth;
 	maxVisibleNodes_ = currentProject_->settings.maxVisibleNodes;
@@ -112,6 +113,7 @@ void App::closeCurrentProject() {
 	knownSources_.clear();
 	knownCitations_.clear();
 	window_.setKnownCitations(knownCitations_);
+	window_.setKnownPlaces({});
 }
 
 void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {						
@@ -260,6 +262,7 @@ std::string App::loadSourceFile(const std::string& filePath) {
 			for (const auto& d : documents) db_->save(d, sourceId);
 		});
 		refreshKnownCitations();  // the Windows needs the new citations for labels, Edit and reuse list
+		refreshKnownPlaces();
 		knownSources_ = db_->loadAllSourceDescriptions();  // the file may have brought new sources with it
 	}
 	catch (const std::exception& e) {
@@ -430,6 +433,10 @@ void App::rebuildAggregateView() {
 void App::refreshKnownCitations() {
 	knownCitations_ = db_->loadAllCitations();
 	window_.setKnownCitations(knownCitations_);
+}
+
+void App::refreshKnownPlaces() {
+	window_.setKnownPlaces(db_->loadAllPlaces());
 }
 
 void App::run() {
@@ -610,6 +617,16 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to save citation: ") + e.what());
+			}
+		}
+
+		if (auto place = window_.consumePlaceSave()) {
+			try {
+				db_->save(*place);
+				refreshKnownPlaces();
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to save place: ") + e.what());
 			}
 		}
 

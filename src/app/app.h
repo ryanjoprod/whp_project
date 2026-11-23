@@ -50,6 +50,8 @@ private:
 	std::vector<gedcomx::Citation> knownCitations_;
 	void refreshKnownCitations();
 
+	void refreshKnownPlaces();
+
 	std::string pendingExportSourceId_;
 
 	// Aggregate layer

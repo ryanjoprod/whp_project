@@ -132,3 +132,19 @@ std::optional<gedcomx::Date> Window::renderDateEditor(DateEditorTarget target) {
 	if (!showDateEditor_) dateEditorTarget_ = DateEditorTarget::None;
 	return result;
 }
+
+// A text box (typing makes a text-only date) plus a "..." button. Returns true on the frame "..." is pressed.
+bool Window::renderDateInput(const char* id, gedcomx::Date& date, char* buffer, size_t bufferSize, float width) {
+	ImGui::PushID(id);
+	ImGui::SetNextItemWidth(width - 34.0f);
+	if (ImGui::InputTextWithHint("##text", "date", buffer, bufferSize)) {
+		gedcomx::DateParts typed;
+		typed.kind = gedcomx::DateKind::TextOnly;
+		typed.text = buffer;
+		date = gedcomx::toDate(typed);
+	}
+	ImGui::SameLine(0.0f, 4.0f);
+	const bool open = ImGui::Button("...");
+	ImGui::PopID();
+	return open;
+}

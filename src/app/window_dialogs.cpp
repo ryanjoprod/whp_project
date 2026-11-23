@@ -248,6 +248,8 @@ void Window::renderCreationModals(const std::vector<gedcomx::SourceDescription>&
     renderExportModal(knownSources);
     renderLinkPersonModal();
     renderSourceEditor(SourceEditorOwner::App);
+    renderPlaceList();
+    renderPlaceEditor(PlaceEditorOwner::App);
 }
 
 // --- Export Modal ---
