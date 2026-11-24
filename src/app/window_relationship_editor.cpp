@@ -75,6 +75,14 @@ namespace {
     }
 }
 
+void Window::resetRelFactForm() {
+    relEditingFactIndex_ = -1;
+    relSelectedFactTypeIndex_ = 0;
+    relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
+    relFactDate_ = gedcomx::Date{};
+    relFactPlaceId_.clear();
+}
+
 void Window::renderRelationshipEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources) {
     auto selected = [&](int slot) -> const gedcomx::Person* {
         int i = selectedPersonIndex_[slot];
@@ -296,12 +304,6 @@ std::vector<gedcomx::ChildLinkInput> Window::collectChildInputs(int slotCount, s
 void Window::renderRelationshipEditorEventsTab() {
     constexpr int kCount = IM_ARRAYSIZE(kRelFactTypes);
 
-    auto resetEventForm = [&] {
-        relEditingFactIndex_ = -1;
-        relSelectedFactTypeIndex_ = 0;
-        relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
-    };
-
     for (int i = 0; i < (int)workingRelationship_.facts.size(); ++i) {
         ImGui::PushID(i);
         const auto& fact = workingRelationship_.facts[i];
@@ -319,6 +321,8 @@ void Window::renderRelationshipEditorEventsTab() {
             strncpy_s(relFactTypeCustomBuffer_, fact.type.c_str(), sizeof(relFactTypeCustomBuffer_) - 1);
             strncpy_s(relFactDateBuffer_, fact.date.original.c_str(), sizeof(relFactDateBuffer_) - 1);
             strncpy_s(relFactPlaceBuffer_, fact.place.original.c_str(), sizeof(relFactPlaceBuffer_) - 1);
+            relFactDate_ = fact.date;  // the whole date: formal form, calendar, quality and sort value
+            relFactPlaceId_ = fact.place.descriptionId;
         }
         ImGui::SameLine();
         bool removed = false;
@@ -344,33 +348,47 @@ void Window::renderRelationshipEditorEventsTab() {
     bool isCustomType = relSelectedFactTypeIndex_ == kCount - 1;
     if (isCustomType)
         ImGui::InputText("Custom Type URI", relFactTypeCustomBuffer_, sizeof(relFactTypeCustomBuffer_));
-    ImGui::InputText("Date", relFactDateBuffer_, sizeof(relFactDateBuffer_));
-    ImGui::InputText("Place", relFactPlaceBuffer_, sizeof(relFactPlaceBuffer_));
+
+    if (renderDateInput("relFactDate", relFactDate_, relFactDateBuffer_, sizeof(relFactDateBuffer_), ImGui::CalcItemWidth()))
+        openDateEditor(DateEditorTarget::RelationshipFact, relFactDate_);
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Date");
+
+    ImGui::InputText("Place", relFactPlaceBuffer_, sizeof(relFactTypeCustomBuffer_));  // what the source says
+    if (renderPlacePicker("##relFactPlace", relFactPlaceId_, nullptr, ImGui::CalcItemWidth() - 60.0f)) {
+        if (relFactPlaceBuffer_[0] == '\0')
+            strncpy_s(relFactPlaceBuffer_, placeTitleById(relFactPlaceId_).c_str(), _TRUNCATE);
+    }
+    ImGui::SameLine(0.0f, 4.0f);
+    ImGui::BeginDisabled(relFactPlaceId_.empty());
+    if (ImGui::SmallButton("Unlink")) relFactPlaceId_.clear();
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Linked place");
 
     bool noCustomType = isCustomType && relFactTypeCustomBuffer_[0] == '\0';
     ImGui::BeginDisabled(noCustomType);
     if (ImGui::Button(relEditingFactIndex_ >= 0 ? "Update Event" : "Add Event")) {
-        gedcomx::Fact fact;
+        gedcomx::Fact fact = relEditingFactIndex_ >= 0 ? workingRelationship_.facts[relEditingFactIndex_] : gedcomx::Fact{};  // keeps id, value, conclusion 
         fact.type = isCustomType ? relFactTypeCustomBuffer_ : kRelFactTypes[relSelectedFactTypeIndex_];
-        fact.date.original = relFactDateBuffer_;
+        fact.date = relFactDate_;
         fact.place.original = relFactPlaceBuffer_;
+        fact.place.descriptionId = relFactPlaceId_;
 
         if (relEditingFactIndex_ >= 0) {
-            fact.id = workingRelationship_.facts[relEditingFactIndex_].id;
-            fact.conclusion = workingRelationship_.facts[relEditingFactIndex_].conclusion;
             workingRelationship_.facts[relEditingFactIndex_] = fact;
         }
         else {
             fact.id = idgen::generateLocalId("F_");
             workingRelationship_.facts.push_back(fact);
         }
-        resetEventForm();
+        resetRelFactForm();
     }
     ImGui::EndDisabled();
 
     if (relEditingFactIndex_ >= 0) {
         ImGui::SameLine();
-        if (ImGui::Button("Cancel Edit")) resetEventForm();
+        if (ImGui::Button("Cancel Edit")) resetRelFactForm();
     }
 }
 
@@ -382,6 +400,7 @@ void Window::renderRelationshipEditorAttributesTab() {}
 
 void Window::requestNewRelationshipEditor() {
     workingRelationship_ = gedcomx::Relationship{};
+    resetRelFactForm();
 
     for (int i = 0; i < 2; ++i) {
         personSearchBuffer_[i][0] = '\0';
@@ -411,9 +430,7 @@ void Window::requestEditRelationshipEditor(const gedcomx::Relationship& rel, con
         pendingSearchQuery_[i].reset();
     }
     
-    relEditingFactIndex_ = -1;
-    relSelectedFactTypeIndex_ = 0;
-    relFactTypeCustomBuffer_[0] = relFactDateBuffer_[0] = relFactPlaceBuffer_[0] = '\0';
+    resetRelFactForm();
 
     showNewRelationshipModal_ = true;
 
@@ -455,6 +472,10 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
 
         if (personEditorForChild_) renderPersonEditor(knownSources);  // Person Editor loading
         renderCitationEditor(CitationEditorOwner::Relationship, knownSources);
+        if (auto picked = renderDateEditor(DateEditorTarget::RelationshipFact)) {
+            relFactDate_ = *picked;
+            strncpy_s(relFactDateBuffer_, picked->original.c_str(), _TRUNCATE);
+        }
 
         ImGui::Separator();
         bool noPerson1 = selectedPersonIndex_[0] < 0 || selectedPersonIndex_[0] >= (int)personSearchResults_[0].size();

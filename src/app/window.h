@@ -433,6 +433,9 @@ private:
 	char relFactTypeCustomBuffer_[256] = "";
 	char relFactDateBuffer_[128] = "";
 	char relFactPlaceBuffer_[128] = "";
+	gedcomx::Date relFactDate_;  // the structured date; the buffer is just what the text box shows
+	std::string relFactPlaceId_;  // the linked place ("" = none)
+	void resetRelFactForm();
 
 	// Relationship Type Modal state
 	std::optional<std::pair<std::vector<gedcomx::Relationship>, std::string>> newRelationshipResult_;
@@ -510,7 +513,7 @@ private:
 	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
 
 	// --- Date Editor (one popup, opened from any date field) ---
-	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent, PersonFact };
+	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent, PersonFact, RelationshipFact };
 
 	DateEditorTarget dateEditorTarget_ = DateEditorTarget::None;
 	bool showDateEditor_ = false;
