@@ -129,6 +129,33 @@ std::string Window::collectPlace(gedcomx::PlaceDescription& out) const {
 	return gedcomx::validatePlace(out);
 }
 
+// A combo that picks a place by title, with a filter. Returns true on the frame a place is picked
+bool Window::renderPlacePicker(const char* id, std::string& placeId, const std::unordered_set<std::string>* excluded, float width) {
+	bool picked = false;
+	const std::string preview = placeId.empty() ? "Choose a place..." : placeTitleById(placeId);
+
+	ImGui::SetNextItemWidth(width);
+	if (ImGui::BeginCombo(id, preview.c_str())) {
+		if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+		ImGui::InputTextWithHint("##filter", "Filter...", placeParentFilterBuffer_, sizeof(placeParentFilterBuffer_));  // one filter box shared by every picker
+		const std::string needle = lowered(placeParentFilterBuffer_);
+
+		for (const auto& entry : placePickList_) {
+			if (excluded && excluded->count(entry.second)) continue;
+			if (!needle.empty() && lowered(entry.first).find(needle) == std::string::npos) continue;
+			ImGui::PushID(entry.second.c_str());
+			if (ImGui::Selectable(entry.first.c_str(), entry.second == placeId)) {
+				placeId = entry.second;
+				placeParentFilterBuffer_[0] = '\0';
+				picked = true;
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndCombo();
+	}
+	return picked;
+}
+
 // --- Tabs ---
 
 void Window::renderPlaceNamesTab() {
@@ -194,25 +221,7 @@ void Window::renderPlaceParentsTab() {
 		auto& row = placeParents_[i];
 		ImGui::PushID(i);
 
-		const std::string preview = row.parentId.empty() ? "Choose a parent..." : placeTitleById(row.parentId);
-		ImGui::SetNextItemWidth(300.0f);
-		if (ImGui::BeginCombo("##parent", preview.c_str())) {
-			if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-			ImGui::InputTextWithHint("##filter", "Filter...", placeParentFilterBuffer_, sizeof(placeParentFilterBuffer_));
-			const std::string needle = lowered(placeParentFilterBuffer_);
-
-			for (const auto& entry : placePickList_) {
-				if (placeParentExcluded_.count(entry.second)) continue;  // itself or something below it
-				if (!needle.empty() && lowered(entry.first).find(needle) == std::string::npos) continue;
-				ImGui::PushID(entry.second.c_str());
-				if (ImGui::Selectable(entry.first.c_str(), entry.second == row.parentId)) {
-					row.parentId = entry.second;
-					placeParentFilterBuffer_[0] = '\0';
-				}
-				ImGui::PopID();
-			}
-			ImGui::EndCombo();
-		}
+		renderPlacePicker("##parent", row.parentId, &placeParentExcluded_, 300.0f);
 
 		ImGui::SameLine(0.0f, 4.0f);
 		if (renderDateInput("date", row.date, row.dateText, sizeof(row.dateText), 150.0f)) {

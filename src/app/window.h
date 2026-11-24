@@ -373,9 +373,14 @@ private:
 
 	char factTypeCustomBuffer_[128] = "";
 	int selectedFactTypeIndex_ = 0;
-	char factDateBuffer_[64] = "";
+	char factDateBuffer_[128] = "";
 	char factPlaceBuffer_[128] = "";
 	int editingFactIndex_ = -1;  // -1 = adding; >=0 = editing that index
+	gedcomx::Date factDate_;  // the structure date; the buffer is just what the text box show
+	std::string factPlaceId_;  // the linked place ("" = none); factPlaceBuffer_ stays what the source says
+
+	void resetFactForm();
+	bool renderPlacePicker(const char* id, std::string& placeId, const std::unordered_set<std::string>* excluded, float width);
 
 	int selectedSourceIndex_ = -1;
 
@@ -505,7 +510,7 @@ private:
 	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
 
 	// --- Date Editor (one popup, opened from any date field) ---
-	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent };
+	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent, PersonFact };
 
 	DateEditorTarget dateEditorTarget_ = DateEditorTarget::None;
 	bool showDateEditor_ = false;

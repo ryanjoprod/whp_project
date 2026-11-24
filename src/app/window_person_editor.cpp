@@ -19,6 +19,14 @@ namespace {
 	};
 }
 
+void Window::resetFactForm() {
+	editingFactIndex_ = -1;
+	factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
+	factDate_ = gedcomx::Date();
+	factPlaceId_.clear();
+	selectedFactTypeIndex_ = 0;
+}
+
 void Window::requestNewPersonEditor() {
 	personEditorForChild_ = false;
 	workingPerson_ = gedcomx::Person{};
@@ -29,9 +37,7 @@ void Window::requestNewPersonEditor() {
 	genderIndex_ = 2;
 
 	selectedSourceIndex_ = -1;
-	editingFactIndex_ = -1;
-	factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
-	selectedFactTypeIndex_ = 0;
+	resetFactForm();
 
 	editingAttributeIndex_ = -1;
 	attrTypeBuffer_[0] = attrValueBuffer_[0] = '\0';
@@ -92,9 +98,7 @@ void Window::requestEditPersonEditor(const gedcomx::Person& person) {
 	}
 
 	selectedSourceIndex_ = -1;  // resolved against knownSources in the top strip
-	editingFactIndex_ = -1;
-	factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
-	selectedFactTypeIndex_ = 0;
+	resetFactForm();
 
 	editingAttributeIndex_ = -1;
 	attrTypeBuffer_[0] = attrValueBuffer_[0] = '\0';
@@ -214,6 +218,8 @@ void Window::renderPersonEditorEventsTab() {
 			strncpy_s(factTypeCustomBuffer_, fact.type.c_str(), sizeof(factTypeCustomBuffer_) - 1);
 			strncpy_s(factDateBuffer_, fact.date.original.c_str(), sizeof(factDateBuffer_) - 1);
 			strncpy_s(factPlaceBuffer_, fact.place.original.c_str(), sizeof(factPlaceBuffer_) - 1);
+			factDate_ = fact.date;  // the whole date: formal form, calendar, quality and sort value
+			factPlaceId_ = fact.place.descriptionId;
 		}
 		ImGui::SameLine();
 		bool removed = false;
@@ -239,20 +245,34 @@ void Window::renderPersonEditorEventsTab() {
 	}
 	bool isCustomType = selectedFactTypeIndex_ == IM_ARRAYSIZE(kFactTypes) - 1;
 	if (isCustomType) ImGui::InputText("Custom Type URI", factTypeCustomBuffer_, sizeof(factTypeCustomBuffer_));
-	ImGui::InputText("Date", factDateBuffer_, sizeof(factDateBuffer_));
-	ImGui::InputText("Place", factPlaceBuffer_, sizeof(factPlaceBuffer_));
+	// the words can be typed (a text-only date); "..." opens the Date editor for the structured form
+	if (renderDateInput("factDate", factDate_, factDateBuffer_, sizeof(factDateBuffer_), ImGui::CalcItemWidth()))
+		openDateEditor(DateEditorTarget::PersonFact, factDate_);
+	ImGui::SameLine();
+	ImGui::TextUnformatted("Date");
+
+	ImGui::InputText("Place", factPlaceBuffer_, sizeof(factPlaceBuffer_));  // what the source says
+	if (renderPlacePicker("##factPlace", factPlaceId_, nullptr, ImGui::CalcItemWidth() - 60.0f)) {
+		if (factPlaceBuffer_[0] == '\0')
+			strncpy_s(factPlaceBuffer_, placeTitleById(factPlaceBuffer_).c_str(), _TRUNCATE);
+	}
+	ImGui::SameLine(0.0f, 4.0f);
+	ImGui::BeginDisabled(factPlaceId_.empty());
+	if (ImGui::SmallButton("Unlink")) factPlaceId_.clear();
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	ImGui::TextUnformatted("Linked place");
 
 	bool noCustomType = isCustomType && factTypeCustomBuffer_[0] == '\0';
 	ImGui::BeginDisabled(noCustomType);
 	if (ImGui::Button(editingFactIndex_ >= 0 ? "Update Event" : "Add Event")) {
-		gedcomx::Fact fact;
+		gedcomx::Fact fact = editingFactIndex_ >= 0 ? workingPerson_.facts[editingFactIndex_] : gedcomx::Fact{};  // keeps id, value, conclusion
 		fact.type = isCustomType ? factTypeCustomBuffer_ : kFactTypes[selectedFactTypeIndex_];
-		fact.date.original = factDateBuffer_;
-		fact.place.original = factPlaceBuffer_;
+		fact.date = factDate_;
+		fact.date.original = factPlaceBuffer_;
+		fact.place.descriptionId = factPlaceId_;
 
 		if (editingFactIndex_ >= 0) {
-			fact.id = workingPerson_.facts[editingFactIndex_].id;
-			fact.conclusion = workingPerson_.facts[editingFactIndex_].conclusion;
 			workingPerson_.facts[editingFactIndex_] = fact;
 		}
 		else {
@@ -260,18 +280,14 @@ void Window::renderPersonEditorEventsTab() {
 			workingPerson_.facts.push_back(fact);
 		}
 
-		editingFactIndex_ = -1;
-		factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
-		selectedFactTypeIndex_ = 0;
+		resetFactForm();
 	}
 	ImGui::EndDisabled();
 
 	if (editingFactIndex_ >= 0) {
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel Edit")) {
-			editingFactIndex_ = -1;
-			factDateBuffer_[0] = factPlaceBuffer_[0] = factTypeCustomBuffer_[0] = '\0';
-			selectedFactTypeIndex_ = 0;
+			resetFactForm();
 		}
 	}
 }
@@ -440,6 +456,10 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 		}
 
 		renderCitationEditor(CitationEditorOwner::Person, knownSources);
+		if (auto picked = renderDateEditor(DateEditorTarget::PersonFact)) {
+			factDate_ = *picked;
+			strncpy_s(factDateBuffer_, picked->original.c_str(), _TRUNCATE);
+		}
 
 		ImGui::Separator();
 		bool noSource = selectedSourceIndex_ < 0 || selectedSourceIndex_ >= (int)knownSources.size();
