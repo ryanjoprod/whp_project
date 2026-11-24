@@ -169,3 +169,84 @@ TEST_CASE("Event and role citations round-trip") {
 	REQUIRE(events[0].roles[0].conclusion.sources.size() == 1);
 	CHECK(events[0].roles[0].conclusion.sources[0].citationId == gedcomx::bareCitationId("SD2"));
 }
+
+TEST_CASE("loadEventsForPerson returns the person's events, earliest first, undated last") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+	savePerson(db, "P1", "S1");
+	savePerson(db, "P2", "S1");
+
+	gedcomx::Event undated = makeEvent("E_NODATE");
+	undated.roles.push_back(makeRole("P1", "http://gedcomx.org/Principal"));
+
+	gedcomx::Event late = makeEvent("E_LATE");
+	late.date.sortValue = 2415021;
+	late.roles.push_back(makeRole("P1", "http://gedcomx.org/Principal"));
+
+	gedcomx::Event early = makeEvent("E_EARLY");
+	early.date.sortValue = 2400000;
+	early.roles.push_back(makeRole("P1", "http://gedcomx.org/Principal"));
+	early.roles.push_back(makeRole("P2", "http://gedcomx.org/Witness"));
+
+	gedcomx::Event other = makeEvent("E_OTHER");
+	other.roles.push_back(makeRole("P2", "http://gedcomx.org/Principal"));
+
+	db.save(undated, "S1");
+	db.save(late, "S1");
+	db.save(early, "S1");
+	db.save(other, "S1");
+
+	auto events = db.loadEventsForPerson("S1:P1");
+	REQUIRE(events.size() == 3);
+	CHECK(events[0].id == "S1:E_EARLY");
+	CHECK(events[1].id == "S1:E_LATE");
+	CHECK(events[2].id == "S1:E_NODATE");
+	CHECK(events[0].roles.size() == 2);  // the whole event, with everyone's role
+
+	CHECK(db.loadEventsForPerson("S1:NOBODY").empty());
+}
+
+TEST_CASE("loadEventsForPerson does not mix sources that share a local person id") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+	testutil::saveSource(db, "S2");
+	savePerson(db, "P1", "S1");
+	savePerson(db, "P1", "S2");
+
+	gedcomx::Event e1 = makeEvent("E1");
+	e1.roles.push_back(makeRole("P1", "http://gedcomx.org/Principal"));
+	db.save(e1, "S1");
+
+	gedcomx::Event e2 = makeEvent("E2");
+	e2.roles.push_back(makeRole("P1", "http://gedcomx.org/Principal"));
+	db.save(e2, "S2");
+
+	auto events = db.loadEventsForPerson("S1:P1");
+	REQUIRE(events.size() == 1);
+	CHECK(events[0].id == "S1:E1");
+}
+
+TEST_CASE("deleteEvent removes the event and everything it owns, but not the people") {
+	storage::Database db(":memory:");
+	testutil::saveSource(db, "S1");
+	savePerson(db, "P1", "S1");
+
+	gedcomx::Event e = makeEvent("E1");
+	e.conclusion.notes.push_back({ "en", "", "Event note" });
+	gedcomx::EventRole role = makeRole("P1", "http://gedcomx.org/Principal");
+	role.conclusion.notes.push_back({ "en", "", "Role note" });
+	e.roles.push_back(role);
+	db.save(e, "S1");
+
+	db.deleteEvent("S1:E1");
+	CHECK(db.loadAllEvents().empty());
+	CHECK(db.loadPerson("S1:P1").has_value());
+	CHECK_NOTHROW(db.deleteEvent("S1:GONE"));  // nothing there: harmless
+
+	// Saving the same id again starts clean: nothing is left from the deleted event
+	db.save(makeEvent("E1"), "S1");
+	auto events = db.loadAllEvents();
+	REQUIRE(events.size() == 1);
+	CHECK(events[0].roles.empty());
+	CHECK(events[0].conclusion.notes.empty());
+}

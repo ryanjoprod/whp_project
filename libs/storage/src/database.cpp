@@ -651,6 +651,22 @@ namespace storage {
 			return results;
 		}
 
+		std::vector<gedcomx::Event> loadEventsForPerson(const std::string& personKey) {
+			std::vector<gedcomx::Event> results;
+			query(std::string("SELECT row_key, local_id, source_id, type, place_original, place_description_id, description, confidence, lang, ") + kDateColumns +
+				" FROM events WHERE row_key IN (SELECT event_id FROM event_roles WHERE person_id = ?)"
+				" ORDER BY date_sort IS NULL, date_sort, row_key;",
+				{ personKey },
+				[&](sqlite3_stmt* s) {
+					results.push_back(loadEventRow(s));
+				});
+			return results;
+		}
+
+		void deleteEvent(const std::string& eventKey) {
+			exec("DELETE FROM events WHERE row_key = ?;", { eventKey });  // cascades to roles, notes and citations
+		}
+
 		void save(const gedcomx::Document& doc, const std::string& sourceId) {
 			const std::string key = rowKey(sourceId, doc.id);
 			upsert("INSERT INTO documents (row_key, local_id, source_id, type, text_type, extracted, text, confidence, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
@@ -1650,6 +1666,14 @@ namespace storage {
 
 	std::vector<gedcomx::Event> Database::loadEventsForSource(const std::string& sourceId) {
 		return impl_->loadEventsForSource(sourceId);
+	}
+
+	std::vector<gedcomx::Event> Database::loadEventsForPerson(const std::string& personRowKey) {
+		return impl_->loadEventsForPerson(personRowKey);
+	}
+
+	void Database::deleteEvent(const std::string& eventRowKey) {
+		impl_->deleteEvent(eventRowKey);
 	}
 	
 	void Database::save(const gedcomx::Document& document, const std::string& sourceId) {

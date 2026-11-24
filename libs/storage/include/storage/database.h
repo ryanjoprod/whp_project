@@ -107,6 +107,8 @@ namespace storage {
 		void save(const gedcomx::Event& event, const std::string& sourceId);
 		std::vector<gedcomx::Event> loadAllEvents();
 		std::vector<gedcomx::Event> loadEventsForSource(const std::string& sourceId);
+		std::vector<gedcomx::Event> loadEventsForPerson(const std::string& personRowKey);  // events the person has a role in; earliest first, undated last
+		void deleteEvent(const std::string& eventRowKey);  // its roles, notes and citations links go with it
 
 		void save(const gedcomx::Document& document, const std::string& sourceId);
 		std::vector<gedcomx::Document> loadAllDocuments();
