@@ -48,9 +48,11 @@ std::optional<gedcomx::Citation> Window::consumeCitationSave() {
 }
 
 std::vector<gedcomx::SourceReference>& Window::citationTargetRefs() {
-	return citationEditorOwner_ == CitationEditorOwner::Relationship
-		? workingRelationship_.conclusion.sources
-		: workingPerson_.conclusion.sources;
+	switch (citationEditorOwner_) {
+	case CitationEditorOwner::Relationship: return workingRelationship_.conclusion.sources;
+	case CitationEditorOwner::Place: return workingPlace_.conclusion.sources;
+	default: return workingPerson_.conclusion.sources;
+	}
 }
 
 // --- The list on the Citations tabs ---

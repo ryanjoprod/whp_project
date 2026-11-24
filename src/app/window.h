@@ -380,7 +380,7 @@ private:
 	int selectedSourceIndex_ = -1;
 
 	// --- Citation Editor (one popup, shared by the Person and Relationship editors) ---
-	enum class CitationEditorOwner { None, Person, Relationship };
+	enum class CitationEditorOwner { None, Person, Relationship, Place };
 
 	std::vector<gedcomx::Citation> knownCitations_;  // pushed by App; includes bare citations
 	std::string lastCitedSourceId_;  // preselected the next time the editor opens
@@ -548,12 +548,13 @@ private:
 	int placeDateRow_ = -1;  // the row whose "..." opened the Date editor
 
 	void openPlaceEditor(PlaceEditorOwner owner, const gedcomx::PlaceDescription* existing);
-	void renderPlaceEditor(PlaceEditorOwner owner);
-	void renderPlaceList();
+	void renderPlaceEditor(PlaceEditorOwner owner, const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderPlaceList(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderPlaceNamesTab();
 	void renderPlaceLocationTab();
 	void renderPlaceParentsTab();
 	void renderPlaceLinksTab();
+	void renderPlaceCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
 	std::string collectPlace(gedcomx::PlaceDescription& out) const;  // first problem, or "" when out can be saved
 	std::string placeTitleById(const std::string& id) const;
 	static bool renderDateInput(const char* id, gedcomx::Date& date, char* buffer, size_t bufferSize, float width);
