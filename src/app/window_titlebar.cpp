@@ -8,6 +8,12 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
 
     ImGuiWindowFlags titleBarFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar;
 
+    // One color across the whole 32px strip, with the menu text centered in it
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float pad = (kTitleBarHeight - ImGui::GetFontSize()) * 0.5f;  // mennu bar height = font + 2 * pad = kTitleBarHeight
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, pad));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, style.Colors[ImGuiCol_MenuBarBg]);
+
     ImGui::Begin("TitleBar", nullptr, titleBarFlags);
 
     if (ImGui::BeginMenuBar()) {
@@ -82,7 +88,9 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Data")) {
+        const bool dataMenuOpen = ImGui::BeginMenu("Data");
+        menuRightEdge_ = (int)ImGui::GetItemRectMax().x;  // the last menu header: the title strip starts after it
+        if (dataMenuOpen) {
             ImGui::BeginDisabled(!projectOpen_);
             if (ImGui::MenuItem("New Person...")) {
                 requestNewPersonEditor();
@@ -101,53 +109,69 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
         }
 
         ImGui::Text("  WHP - Genealogy Visualizer");
-
-        ImGui::SameLine(ImGui::GetWindowWidth() - 80);
-        if (ImGui::Button("[ ]", ImVec2(30, 0))) {
-            bool isMaximized = (SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED) != 0;
-            if (isMaximized) SDL_RestoreWindow(window_);
-            else SDL_MaximizeWindow(window_);
-        }
-
-        ImGui::SameLine(ImGui::GetWindowWidth() - 40);
-        if (ImGui::Button("X", ImVec2(30, 0))) {
-            running_ = false;
-        }
-
         ImGui::EndMenuBar();
     }
 
     renderNewProjectModal();
     renderSwitchConfirmModal();
 
-    bool titleBarHovered = ImGui::IsWindowHovered();
-    bool titleBarClickable = titleBarHovered && !ImGui::IsAnyItemHovered();
+    ImGui::End(); 
 
-    if (titleBarClickable && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-        bool isMaximized = (SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED) != 0;
-        if (isMaximized) SDL_RestoreWindow(window_);
-        else SDL_MaximizeWindow(window_);
-    }
-    else if (titleBarClickable && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        bool isMaximized = (SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED) != 0;
-        if (!isMaximized) {
-            draggingWindow_ = true;
-            SDL_GetGlobalMouseState(&dragStartMouseX_, &dragStartMouseY_);
-            SDL_GetWindowPosition(window_, &dragStartWindowX_, &dragStartWindowY_);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    renderWindowButtons();
+}
+
+void Window::renderWindowButtons() {
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* draw = ImGui::GetForegroundDrawList();  // above every window: a modal popup cannot block or cover these
+    const bool maximized = (SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED) != 0;
+    const float width = io.DisplaySize.x;
+    const ImU32 ink = IM_COL32(230, 230, 230, 255);
+    const float s = 5.0f;
+
+    for (int i = 0; i < 3; ++i) {  // 0 minimize, 1 maximize or restore, 2 close
+        const ImVec2 lo(width - (3 - i) * kWindowButtonWidth, 0.0f);
+        const ImVec2 hi(lo.x + kWindowButtonWidth, kTitleBarHeight);
+        const bool hovered = io.MousePos.x >= lo.x && io.MousePos.x < hi.x && io.MousePos.y >= lo.y && io.MousePos.y < hi.y;
+
+        if (hovered) draw->AddRectFilled(lo, hi, i == 2 ? IM_COL32(200, 40, 40, 255) : IM_COL32(255, 255, 255, 40));
+
+        const ImVec2 c((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f);
+        if (i == 0) {
+            draw->AddLine(ImVec2(c.x - s, c.y), ImVec2(c.x + s, c.y), ink, 1.0f);
+        }
+        else if (i == 1) {
+            if (maximized) {  // two overlapping squares mean "restore"
+                draw->AddRect(ImVec2(c.x - s + 2.0f, c.y - s), ImVec2(c.x + s, c.y + s - 2.0f), ink);
+                draw->AddRect(ImVec2(c.x - s, c.y - s + 2.0f), ImVec2(c.x + s - 2.0f, c.y + s), ink);
+            }
+            else {
+                draw->AddRect(ImVec2(c.x - s, c.y - s), ImVec2(c.x + s, c.y + s), ink);
+            }
+        }
+        else {
+            draw->AddLine(ImVec2(c.x - s, c.y - s), ImVec2(c.x + s, c.y + s), ink, 1.0f);
+            draw->AddLine(ImVec2(c.x - s, c.y + s), ImVec2(c.x + s, c.y - s), ink, 1.0f);
+        }
+
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            pressedWindowButton_ = i;
+        if (hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && pressedWindowButton_ == i) {  // act on release, like real buttons
+            if (i == 0) {
+                SDL_MinimizeWindow(window_);
+            }
+            else if (i == 1) {
+                if (maximized) SDL_RestoreWindow(window_);
+                else SDL_MaximizeWindow(window_);
+            }
+            else {
+                running_ = false;
+            }
         }
     }
 
-    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        draggingWindow_ = false;
-    }
-
-    if (draggingWindow_) {
-        float currentMouseX, currentMouseY;
-        SDL_GetGlobalMouseState(&currentMouseX, &currentMouseY);
-        int dx = (int)(currentMouseX - dragStartMouseX_);
-        int dy = (int)(currentMouseY - dragStartMouseY_);
-        SDL_SetWindowPosition(window_, dragStartWindowX_ + dx, dragStartWindowY_ + dy);
-    }
-
-    ImGui::End();
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        pressedWindowButton_ = -1;
 }

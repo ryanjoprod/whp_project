@@ -253,6 +253,10 @@ private:
 	bool running_ = true;
 	bool showLogWindow_ = false;
 	static constexpr float kTitleBarHeight = 32.0f;
+	static constexpr float kWindowButtonWidth = 40.0f;
+	static constexpr int kResizeBorder = 6;
+	static constexpr int kMinWindowWidth = 720;
+	static constexpr int kMinWindowHeight = 420;
 
 	struct EditableNameEntry {
 		char given[128] = "";
@@ -274,10 +278,11 @@ private:
 		}
 	}
 
-	// Window movement and position
-	bool draggingWindow_ = false;
-	float dragStartMouseX_ = 0, dragStartMouseY_ = 0;
-	int dragStartWindowX_ = 0, dragStartWindowY_ = 0;
+	// Window moving and resizing is done by the OS; this tells it where the title strip and edges are
+	static SDL_HitTestResult SDLCALL hitTestCallback(SDL_Window* window, const SDL_Point* area, void* data);
+	std::atomic<int> menuRightEdge_{ 300 };  // the title strip is draggable to the right of this (set while drawing the menu)
+	int pressedWindowButton_ = -1;
+	void renderWindowButtons();
 	std::string reRootRequestId_;
 
 	// Layout state

@@ -14,6 +14,12 @@ Window::Window() {
 		throw std::runtime_error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 	}
 
+	SDL_SetWindowMinimumSize(window_, kMinWindowWidth, kMinWindowHeight);
+	if (!SDL_SetWindowHitTest(window_, &Window::hitTestCallback, this)) {
+		Logger::log(LogLevel::Warning, std::string("Could not set window hit test: ") + SDL_GetError());
+	}
+	Logger::log(LogLevel::Info, "SDL version " + std::to_string(SDL_GetVersion()));  // handy if snapping mimsbehaves
+
 	renderer_ = SDL_CreateRenderer(window_, nullptr);
 	if (!renderer_) {
 		SDL_DestroyWindow(window_);
@@ -40,6 +46,37 @@ Window::~Window() {
 	SDL_DestroyRenderer(renderer_);
 	SDL_DestroyWindow(window_);
 	SDL_Quit();
+}
+
+SDL_HitTestResult SDLCALL Window::hitTestCallback(SDL_Window* window, const SDL_Point* area, void* data) {
+	const Window* self = static_cast<const Window*>(data);
+	int width = 0, height = 0;
+	SDL_GetWindowSize(window, &width, &height);
+
+	// The window buttons are ordinary client area: the app draws and clicks them itself
+	if (area->y < (int)kTitleBarHeight && area->x >= width - 3 * (int)kWindowButtonWidth)
+		return SDL_HITTEST_NORMAL;
+
+	const bool maximized = (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) != 0;
+	if (!maximized) {
+		const bool left = area->x < kResizeBorder;
+		const bool right = area->x >= width - kResizeBorder;
+		const bool top = area->y < kResizeBorder;
+		const bool bottom = area->y >= height - kResizeBorder;
+
+		if (top && left) return SDL_HITTEST_RESIZE_TOPLEFT;
+		if (top && right) return SDL_HITTEST_RESIZE_TOPRIGHT;
+		if (bottom && left) return SDL_HITTEST_RESIZE_BOTTOMLEFT;
+		if (bottom && right) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
+		if (top) return SDL_HITTEST_RESIZE_TOP;
+		if (bottom) return SDL_HITTEST_RESIZE_BOTTOM;
+		if (left) return SDL_HITTEST_RESIZE_LEFT;
+		if (right) return SDL_HITTEST_RESIZE_RIGHT;
+	}
+
+	// The strip between the menu and the window buttons is the title bar
+	if (area->y < (int)kTitleBarHeight && area->x >= self->menuRightEdge_.load()) return SDL_HITTEST_DRAGGABLE;
+	return SDL_HITTEST_NORMAL;
 }
 
 bool Window::isRunning() const {
