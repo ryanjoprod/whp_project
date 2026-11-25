@@ -444,7 +444,7 @@ void Window::renderRelationshipEditor(const std::vector<gedcomx::SourceDescripti
     }
 
     ImGui::SetNextWindowSize(ImVec2(640, 520), ImGuiCond_FirstUseEver);
-    if (ImGui::BeginPopupModal("Relationship Editor", &showNewRelationshipModal_)) {
+    if (beginModal("Relationship Editor", &showNewRelationshipModal_)) {
         renderRelationshipEditorTopStrip(knownSources);
         ImGui::Separator();
 
@@ -584,7 +584,7 @@ void Window::renderChildrenEditor(const std::vector<gedcomx::SourceDescription>&
     }
 
     ImGui::SetNextWindowSize(ImVec2(560, 460), ImGuiCond_FirstUseEver);
-    if (ImGui::BeginPopupModal("Edit Children", &showChildrenEditor_)) {
+    if (beginModal("Edit Children", &showChildrenEditor_)) {
         ImGui::Text("Children of %s", soloParent_.primaryFullText().c_str());
         ImGui::Separator();
 

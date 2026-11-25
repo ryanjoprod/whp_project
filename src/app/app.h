@@ -23,6 +23,8 @@ private:
 	std::unique_ptr<storage::Database> db_;	 // null until a project is open
 	Window window_;
 
+	void renderFrame();
+
 	void newProject(const std::string& folderPath, const std::string& projectName);
 	void openProject(const std::string& whprojPath);
 	void saveProject();

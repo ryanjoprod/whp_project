@@ -48,6 +48,9 @@ Extract the raw string from `schema.h`, feed it to `sqlite3` line by line with `
 - Fixed-size tables inside `AlwaysAutoResize` popups (avoid `-FLT_MIN` widths); wrap each tab body in a fixed-size `BeginChild` so the popup does not resize per tab.
 - `InputText` buffers must be char arrays; structs must be declared before first use.
 - An open modal blocks input to every other ImGui window (see the main window note in the design decisions).
+- ImGui remembers a window's position (popups are centered only on first use), so it never moves back when the main window shrinks. Clamp it yourself every frame (`Window::fitNextWindow`).
+- The event-watch redraw is only for the OS resize drag. The main loop must call `App::renderFrame()` each iteration; if only the watcher draws, the UI lags by seconds and goes black when the watcher is off.
+- Never call `SDL_RenderPresent` or `ImGui::NewFrame` from a window-event handler unless the redraw guard (`allowLiveRedraw_`) says the loop is between frames.
 
 ## Folder rules for this project
 

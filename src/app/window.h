@@ -86,6 +86,7 @@ public:
 	void renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderCanvas(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships, const std::vector<gedcomx::SourceDescription>& knownSources, const std::unordered_map<std::string, std::vector<std::string>>& aggregateSourceIds);
 	void endFrame();
+	void setLiveRedraw(std::function<void()> redraw);  // called while the OS hold the main loop (a resize drag); nullptr stop it
 
 	// Window resize and reframe
 	std::string consumeReRootRequest();
@@ -257,6 +258,17 @@ private:
 	static constexpr int kResizeBorder = 6;
 	static constexpr int kMinWindowWidth = 720;
 	static constexpr int kMinWindowHeight = 420;
+
+	// Redraw functions
+	std::function<void()> liveRedraw_;
+	bool liveRedrawInstalled_ = false;
+	bool allowLiveRedraw_ = false;  // true only while we are inside processEvents(): never mid-frame
+	static bool SDLCALL eventWatch(void* userdata, SDL_Event* event);
+
+	// Modal Popup helpers
+	static constexpr float kPopupMargin = 16.0f;
+	bool beginModal(const char* name, bool* open, ImGuiWindowFlags flags = 0);  // BeginPopupModal that never grows past the window
+	void fitNextWindow(const char* name);  // cap the next window's size and pull its position inside the main window
 
 	struct EditableNameEntry {
 		char given[128] = "";

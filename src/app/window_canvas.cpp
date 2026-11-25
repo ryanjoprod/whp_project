@@ -381,6 +381,7 @@ void Window::renderDetailsPanel(
 
     ImGui::SetNextWindowSize(ImVec2(320, 0), ImGuiCond_FirstUseEver);
     bool open = true;
+    fitNextWindow("Person Details");
     if (ImGui::Begin("Person Details", &open)) {
         ImGui::Text("%s", person.primaryFullText().c_str());
         ImGui::Separator();

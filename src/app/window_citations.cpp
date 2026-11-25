@@ -250,7 +250,7 @@ void Window::renderCitationEditor(CitationEditorOwner owner, const std::vector<g
 		ImGui::OpenPopup("Citation Editor");
 	}
 	
-	if (ImGui::BeginPopupModal("Citation Editor", &showCitationEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (beginModal("Citation Editor", &showCitationEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
 		if (!pendingCitationSourceId_.empty()) {
 			for (int i = 0; i < (int)knownSources.size(); ++i) {
 				if (knownSources[i].id == pendingCitationSourceId_) {

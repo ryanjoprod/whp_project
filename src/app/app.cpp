@@ -463,38 +463,50 @@ void App::pushSourceEvents(const std::string& sourceId) {
 	window_.setSourceEvents(sourceId, std::move(events), names);
 }
 
+void App::renderFrame() {
+	auto t0 = SDL_GetTicksNS();
+
+	window_.beginFrame();
+	window_.renderTitleBarAndMenu(knownSources_);
+	switch (window_.viewMode()) {
+	case Window::ViewMode::AllSources: {
+		window_.renderCanvas(visiblePeople_, visibleRelationships_, knownSources_, {});
+		break;
+	}
+	case Window::ViewMode::SingleSource: {
+		std::string filterId = window_.viewModeSourceId();
+		std::vector<gedcomx::Person> filteredPeople;
+		std::vector<gedcomx::Relationship> filteredRels;
+		for (const auto& p : visiblePeople_) if (p.sourceId == filterId) filteredPeople.push_back(p);
+		for (const auto& r : visibleRelationships_) if (r.sourceId == filterId) filteredRels.push_back(r);
+		window_.renderCanvas(filteredPeople, filteredRels, knownSources_, {});
+		break;
+	}
+	case Window::ViewMode::Aggregate: {
+		if (aggregateViewDirty_) rebuildAggregateView();
+		window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_, knownSources_, aggregateContributingSourceIds_);
+		break;
+	}
+	}
+	window_.renderLogWindow();
+	window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
+	window_.setProjectOpen(currentProject_.has_value());
+	window_.renderCreationModals(knownSources_);
+	window_.renderGoToPersonModal(knownSources_);
+	window_.renderDeleteConfirmModal();
+	window_.endFrame();
+
+	auto ms = (SDL_GetTicksNS() - t0) / 1000000;
+	if (ms > 50)
+		Logger::log(LogLevel::Warning, "Slow frame: " + std::to_string(ms) + " ms");
+}
+
 void App::run() {
+	window_.setLiveRedraw([this] { renderFrame(); });
+
 	while (window_.isRunning()) {
 		window_.processEvents();
-		window_.beginFrame();
-		window_.renderTitleBarAndMenu(knownSources_);
-		switch (window_.viewMode()) {
-			case Window::ViewMode::AllSources: {
-				window_.renderCanvas(visiblePeople_, visibleRelationships_, knownSources_, {});
-				break;
-			}
-			case Window::ViewMode::SingleSource: {
-				std::string filterId = window_.viewModeSourceId();
-				std::vector<gedcomx::Person> filteredPeople;
-				std::vector<gedcomx::Relationship> filteredRels;
-				for (const auto& p : visiblePeople_) if (p.sourceId == filterId) filteredPeople.push_back(p);
-				for (const auto& r : visibleRelationships_) if (r.sourceId == filterId) filteredRels.push_back(r);
-				window_.renderCanvas(filteredPeople, filteredRels, knownSources_, {});
-				break;
-			}
-			case Window::ViewMode::Aggregate: {
-				if (aggregateViewDirty_) rebuildAggregateView();
-				window_.renderCanvas(aggregateVisiblePeople_, aggregateVisibleRelationships_, knownSources_, aggregateContributingSourceIds_);
-				break;
-			}
-		}
-		window_.renderLogWindow();
-		window_.renderSettingsPanel(neighborhoodDepth_, maxVisibleNodes_);
-		window_.setProjectOpen(currentProject_.has_value());
-		window_.renderCreationModals(knownSources_);
-		window_.renderGoToPersonModal(knownSources_);
-		window_.renderDeleteConfirmModal();
-		window_.endFrame();
+		renderFrame();
 
 		auto newProjectReq = window_.consumeNewProjectRequest();
 		if (newProjectReq) {
@@ -932,6 +944,8 @@ void App::run() {
 			}
 		}
 	}
+
+	window_.setLiveRedraw(nullptr);
 
 	try {
 		saveProject();

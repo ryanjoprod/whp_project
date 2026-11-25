@@ -81,7 +81,7 @@ void Window::renderNewProjectModal() {
         }
     }
 
-    if (ImGui::BeginPopupModal("New Project", &showNewProjectNameModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("New Project", &showNewProjectNameModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Project location: %s", newProjectFolder_.c_str());
         ImGui::InputText("Project Name", newProjectNameBuffer_, sizeof(newProjectNameBuffer_));
 
@@ -132,7 +132,7 @@ void Window::renderSwitchConfirmModal() {
         ImGui::OpenPopup("Confirm Switch Project");
     }
 
-    if (ImGui::BeginPopupModal("Confirm Switch Project", &showSwitchConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("Confirm Switch Project", &showSwitchConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("The current project will be saved before switching.");
         ImGui::Spacing();
 
@@ -158,6 +158,7 @@ void Window::renderLogWindow() {
     if (!showLogWindow_) return;
 
     ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+    fitNextWindow("Log");
     if (ImGui::Begin("Log", &showLogWindow_)) {
         ImGui::PushTextWrapPos(0.0f);
 
@@ -183,6 +184,7 @@ void Window::renderSettingsPanel(int currentNeighborhoodDepth, size_t currentMax
     if (!showSettingsPanel_) return;
 
     ImGui::SetNextWindowSize(ImVec2(360, 0), ImGuiCond_FirstUseEver);
+    fitNextWindow("Settings");
     if (ImGui::Begin("Settings", &showSettingsPanel_)) {
         ImGui::Text("Physics");
         ImGui::SliderFloat("Replusion", &settings_.repulsionStrength, 1000.0f, 20000.0f);
@@ -259,7 +261,7 @@ void Window::renderExportModal(const std::vector<gedcomx::SourceDescription>& kn
         ImGui::OpenPopup("Export Source");
     }
 
-    if (ImGui::BeginPopupModal("Export Source", &showExportModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("Export Source", &showExportModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Choose a source to export:");
 
         if (ImGui::BeginCombo("##exportSourceCombo",
@@ -330,7 +332,7 @@ void Window::renderLinkPersonModal() {
         ImGui::OpenPopup("Link Person");
     }
 
-    if (ImGui::BeginPopupModal("Link Person", &showLinkPersonModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("Link Person", &showLinkPersonModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Link record: %s", linkSourcePersonKey_.c_str());
         ImGui::Separator();
         ImGui::Text("Search for the matching person in another source:");
@@ -406,7 +408,7 @@ void Window::renderDeleteConfirmModal() {
         ImGui::OpenPopup("Confirm Delete");
     }
 
-    if (ImGui::BeginPopupModal("Confirm Delete", &showDeleteConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("Confirm Delete", &showDeleteConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (pendingDelete_) {
             if (pendingDelete_->kind == DeleteRequest::Kind::Person) {
                 ImGui::Text("Delete %s?", pendingDelete_->label.c_str());
@@ -459,7 +461,7 @@ void Window::renderGoToPersonModal(const std::vector<gedcomx::SourceDescription>
         ImGui::OpenPopup("Go to Person");
     }
 
-    if (ImGui::BeginPopupModal("Go to Person", &showGoToModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (beginModal("Go to Person", &showGoToModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();  // start typing immediately
         if (ImGui::InputText("Search", goToSearchBuffer_, sizeof(goToSearchBuffer_))) {
             pendingGoToSearchQuery_ = goToSearchBuffer_;

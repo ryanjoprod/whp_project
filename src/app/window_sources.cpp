@@ -28,7 +28,7 @@ void Window::renderSourceEditor(SourceEditorOwner owner) {
 		ImGui::OpenPopup("Source Editor");
 	}
 
-	if (ImGui::BeginPopupModal("Source Editor", &showSourceEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (beginModal("Source Editor", &showSourceEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::InputText("Title", sourceTitleBuffer_, sizeof(sourceTitleBuffer_));
 		ImGui::InputText("Author", sourceAuthorBuffer_, sizeof(sourceAuthorBuffer_));
 		ImGui::InputText("Pub. info.", sourcePubInfoBuffer_, sizeof(sourcePubInfoBuffer_));

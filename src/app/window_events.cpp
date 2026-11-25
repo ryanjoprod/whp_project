@@ -217,7 +217,7 @@ void Window::renderEventEditor(const std::vector<gedcomx::SourceDescription>& kn
 		ImGui::OpenPopup("Event Editor");
 	}
 
-	if (ImGui::BeginPopupModal("Event Editor", &showEventEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (beginModal("Event Editor", &showEventEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
 		gedcomx::Event preview;
 		const std::string error = collectEvent(preview);
 
@@ -332,7 +332,7 @@ void Window::renderExistinEventPicker() {
 	}
 
 	ImGui::SetNextWindowSize(ImVec2(520.0f, 360.0f), ImGuiCond_Appearing);
-	if (ImGui::BeginPopupModal("Add Existing Event", &showExistingEventPicker_)) {
+	if (beginModal("Add Existing Event", &showExistingEventPicker_)) {
 		const std::string me = personEditorRowKey();
 		const gedcomx::Event* selected = nullptr;
 

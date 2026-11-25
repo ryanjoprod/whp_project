@@ -278,7 +278,7 @@ void Window::renderPlaceEditor(PlaceEditorOwner owner, const std::vector<gedcomx
 		ImGui::OpenPopup("Place Editor");
 	}
 
-	if (ImGui::BeginPopupModal("Place Editor", &showPlaceEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (beginModal("Place Editor", &showPlaceEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
 		gedcomx::PlaceDescription preview;
 		const std::string error = collectPlace(preview);
 
@@ -355,7 +355,7 @@ void Window::renderPlaceList(const std::vector<gedcomx::SourceDescription>& know
 	}
 
 	ImGui::SetNextWindowSize(ImVec2(520.0f, 440.0f), ImGuiCond_Appearing);
-	if (ImGui::BeginPopupModal("Places", &showPlaceList_)) {
+	if (beginModal("Places", &showPlaceList_)) {
 		ImGui::SetNextItemWidth(-FLT_MIN);
 		ImGui::InputTextWithHint("##placeFilter", "Filter...", placeFilterBuffer_, sizeof(placeFilterBuffer_));
 		const std::string needle = lowered(placeFilterBuffer_);

@@ -74,7 +74,7 @@ std::optional<gedcomx::Date> Window::renderDateEditor(DateEditorTarget target) {
 		ImGui::OpenPopup("Date");
 	}
 
-	if (ImGui::BeginPopupModal("Date", &showDateEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (beginModal("Date", &showDateEditor_, ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::SetNextItemWidth(220.0f);
 		ImGui::Combo("Type", &dateKindIndex_, kDateKinds, IM_ARRAYSIZE(kDateKinds));
 		ImGui::SetNextItemWidth(220.0f);

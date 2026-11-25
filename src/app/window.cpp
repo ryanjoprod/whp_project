@@ -1,4 +1,7 @@
 #include <stdexcept>
+#include <algorithm>
+
+#include "imgui_internal.h"  // FindWindowByName: lets us read where a popup currently is
 
 #include "window.h"
 #include "logger.h"
@@ -39,6 +42,7 @@ Window::Window() {
 }
 
 Window::~Window() {
+	if (liveRedrawInstalled_) SDL_RemoveEventWatch(&Window::eventWatch, this);
 	ImGui_ImplSDLRenderer3_Shutdown();
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
@@ -79,11 +83,58 @@ SDL_HitTestResult SDLCALL Window::hitTestCallback(SDL_Window* window, const SDL_
 	return SDL_HITTEST_NORMAL;
 }
 
+// A popup in a small or snapped window gets a scrollbar instead of hanging off the edge
+void Window::fitNextWindow(const char* name) {
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const float left = viewport->Pos.x + kPopupMargin;
+	const float top = viewport->Pos.y + kTitleBarHeight + kPopupMargin;
+	const float right = viewport->Pos.x + viewport->WorkSize.x - kPopupMargin;
+	const float bottom = viewport->Pos.y + viewport->WorkSize.y - kPopupMargin;
+
+	ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(right - left, bottom - top));
+
+	// ImGui centers a popup only the first time it is ever shown and then keeps its position,
+	// so after the window shrinks it can sit past the edge. Pull it back inside every frame.
+	if (ImGuiWindow* w = ImGui::FindWindowByName(name)) {
+		ImVec2 pos = w->Pos;
+		const float maxX = right - std::min(w->Size.x, right - left);
+		const float maxY = bottom - std::min(w->Size.y, bottom - top);
+		pos.x = std::clamp(pos.x, left, std::max(left, maxX));
+		pos.y = std::clamp(pos.y, top, std::max(top, maxY));
+		if (pos.x != w->Pos.x || pos.y != w->Pos.y)
+			ImGui::SetNextWindowPos(pos);
+	}
+}
+
+bool Window::beginModal(const char* name, bool* open, ImGuiWindowFlags flags) {
+	fitNextWindow(name);
+	return ImGui::BeginPopupModal(name, open, flags);
+}
+
+void Window::setLiveRedraw(std::function<void()> redraw) {
+	liveRedraw_ = std::move(redraw);
+	if (!liveRedrawInstalled_) {
+		if (SDL_AddEventWatch(&Window::eventWatch, this))
+			liveRedrawInstalled_ = true;
+		else
+			Logger::log(LogLevel::Warning, std::string("Could not add event watch: ") + SDL_GetError());
+	}
+}
+
+// SDL allows redrawing directly from a watcher on EXPOSED. During an OS resize drag this is what keeps the window alive.
+bool SDLCALL Window::eventWatch(void* userdata, SDL_Event* event) {
+	Window* self = static_cast<Window*>(userdata);
+	if (event->type == SDL_EVENT_WINDOW_EXPOSED && self->allowLiveRedraw_ && self->liveRedraw_)
+		self->liveRedraw_();
+	return true;
+}
+
 bool Window::isRunning() const {
 	return running_;
 }
 
 void Window::processEvents() {
+	allowLiveRedraw_ = true;  // the OS can hold this call for a whole resize drag; the watcher redraws meanwhile
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		ImGui_ImplSDL3_ProcessEvent(&event);
@@ -91,6 +142,7 @@ void Window::processEvents() {
 			running_ = false;
 		}
 	}
+	allowLiveRedraw_ = false;
 }
 
 void Window::beginFrame() {

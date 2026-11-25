@@ -436,7 +436,7 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 	}
 
 	ImGui::SetNextWindowSize(ImVec2(480, 520), ImGuiCond_FirstUseEver);
-	if (ImGui::BeginPopupModal("Person Editor", &showPersonEditor_)) {
+	if (beginModal("Person Editor", &showPersonEditor_)) {
 		renderPersonEditorTopStrip(knownSources);
 		ImGui::Separator();
 
