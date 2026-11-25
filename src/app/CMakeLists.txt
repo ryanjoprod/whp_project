@@ -19,6 +19,7 @@ add_executable(app
 	window_citations.cpp
 	window_date_editor.cpp
 	window_places.cpp
+	window_events.cpp
 )
 
 target_link_libraries(app PRIVATE storage SDL3::SDL3-shared imgui::imgui)

@@ -439,6 +439,19 @@ void App::refreshKnownPlaces() {
 	window_.setKnownPlaces(db_->loadAllPlaces());
 }
 
+void App::pushPersonEvents(const std::string& personRowKey) {
+	auto events = db_->loadEventsForPerson(personRowKey);
+	std::unordered_map<std::string, std::string> names;
+	for (const auto& e : events) {
+		for (const auto& role : e.roles) {
+			if (names.count(role.personId)) continue;
+			auto person = db_->loadPerson(role.personId);
+			names[role.personId] = person ? person->primaryFullText() : role.personId;
+		}
+	}
+	window_.setPersonEvents(personRowKey, std::move(events), std::move(names));
+}
+
 void App::run() {
 	while (window_.isRunning()) {
 		window_.processEvents();
@@ -864,6 +877,38 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load references: ") + e.what());
+			}
+		}
+
+		if (auto personKey = window_.consumePersonEventsRequest()) {
+			try {
+				pushPersonEvents(*personKey);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load events: ") + e.what());
+			}
+		}
+
+		if (auto change = window_.consumeEventChange()) {
+			try {
+				const std::string prefix = change->sourceId + ":";
+				auto toLocal = [&](const std::string& id) {  // stripRowKeyPrefix would chop a local id, so check first
+					return id.compare(0, prefix.size(), prefix) == 0 ? id.substr(prefix.size()) : id;
+				};
+
+				gedcomx::Event event = change->event;
+				event.id = toLocal(event.id);
+				for (auto& role : event.roles)
+					role.personId = toLocal(role.personId);
+
+				if (event.roles.empty())
+					db_->deleteEvent(prefix + event.id);  // nobody left in it
+				else db_->save(event, change->sourceId);
+
+				pushPersonEvents(change->personRowKey);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Faile to save event: ") + e.what());
 			}
 		}
 	}

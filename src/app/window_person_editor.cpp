@@ -45,6 +45,10 @@ void Window::requestNewPersonEditor() {
 	editingAddressIndex_ = -1;
 	addrStateBuffer_[0] = addrCityBuffer_[0] = addrStateBuffer_[0] = addrPostalBuffer_[0] = addrCountryBuffer_[0] = '\0';
 
+	personEventsFor_.clear();
+	personEvents_.clear();
+	eventPersonNames_.clear();
+
 	showPersonEditor_ = true;
 }
 
@@ -105,6 +109,11 @@ void Window::requestEditPersonEditor(const gedcomx::Person& person) {
 
 	editingAddressIndex_ = -1;
 	addrStreetBuffer_[0] = addrCityBuffer_[0] = addrStateBuffer_[0] = addrPostalBuffer_[0] = addrCountryBuffer_[0] = '\0';
+
+	personEventsFor_.clear();
+	personEvents_.clear();
+	eventPersonNames_.clear();
+	pendingPersonEventsRequest_ = person.id;  // the row key, as loaded
 
 	showPersonEditor_ = true;
 }
@@ -199,7 +208,7 @@ void Window::renderPersonEditorNamesTab() {
 	}
 }
 
-void Window::renderPersonEditorEventsTab() {
+void Window::renderPersonEditorFactsTab() {
 	for (int i = 0; i < (int)workingPerson_.facts.size(); ++i) {
 		ImGui::PushID(i);
 		const auto& fact = workingPerson_.facts[i];
@@ -234,7 +243,7 @@ void Window::renderPersonEditorEventsTab() {
 	}
 
 	ImGui::Separator();
-	ImGui::Text(editingFactIndex_ >= 0 ? "Edit Event" : "Add Event");
+	ImGui::Text(editingFactIndex_ >= 0 ? "Edit Fact" : "Add Fact");
 	if (ImGui::BeginCombo("Type", selectedFactTypeIndex_ >= 0 &&  selectedFactTypeIndex_ < IM_ARRAYSIZE(kFactTypes)
 		? gedcomx::formatTypeUri(kFactTypes[selectedFactTypeIndex_]).c_str() : "")) {
 		for (int i = 0; i < IM_ARRAYSIZE(kFactTypes); ++i) {
@@ -265,7 +274,7 @@ void Window::renderPersonEditorEventsTab() {
 
 	bool noCustomType = isCustomType && factTypeCustomBuffer_[0] == '\0';
 	ImGui::BeginDisabled(noCustomType);
-	if (ImGui::Button(editingFactIndex_ >= 0 ? "Update Event" : "Add Event")) {
+	if (ImGui::Button(editingFactIndex_ >= 0 ? "Update Fact" : "Add Fact")) {
 		gedcomx::Fact fact = editingFactIndex_ >= 0 ? workingPerson_.facts[editingFactIndex_] : gedcomx::Fact{};  // keeps id, value, conclusion
 		fact.type = isCustomType ? factTypeCustomBuffer_ : kFactTypes[selectedFactTypeIndex_];
 		fact.date = factDate_;
@@ -432,6 +441,10 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 		ImGui::Separator();
 
 		if (ImGui::BeginTabBar("PersonEditorTabs")) {
+			if (ImGui::BeginTabItem("Facts")) {
+				renderPersonEditorFactsTab();
+				ImGui::EndTabItem();
+			}
 			if (ImGui::BeginTabItem("Events")) {
 				renderPersonEditorEventsTab();
 				ImGui::EndTabItem();

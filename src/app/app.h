@@ -42,6 +42,7 @@ private:
 	int neighborhoodDepth_ = 2;
 	void loadNeighborhood(const std::string& rootPersonKey, int depth);
 	void reloadNeighborhoodFresh();  // drop what's on screen, then load around the current root
+	void pushPersonEvents(const std::string& personRowKey);
 
 	void rebuildVisibleVectors();
 	void evictFarthestUntilUnderCap();

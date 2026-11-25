@@ -21,6 +21,7 @@
 #include "gedcomx/citation.h"
 #include "gedcomx/date_parts.h"
 #include "gedcomx/place_logic.h"
+#include "gedcomx/event.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -61,6 +62,12 @@ struct EditablePlaceUrl {
 	char url[512] = "";
 	char description[256] = "";
 	char type[64] = "";
+};
+
+struct EventChange {
+	gedcomx::Event event;  // a loaded event keeps its row keys; a new one has local ids
+	std::string sourceId;
+	std::string personRowKey;  // who editor asked, so App can refresh that list
 };
 
 class Window {
@@ -224,6 +231,15 @@ public:
 	void requestPlaceList() { showPlaceList_ = true; }
 	void requestNewPlaceEditor() { openPlaceEditor(PlaceEditorOwner::App, nullptr); }
 	std::optional<gedcomx::PlaceDescription> consumePlaceSave();
+
+	// Events (shared, multi-person records)
+	std::optional<std::string> consumePersonEventsRequest() {
+		auto request = pendingPersonEventsRequest_;
+		pendingPersonEventsRequest_.reset();
+		return request;
+	}
+	void setPersonEvents(const std::string& personRowKey, std::vector<gedcomx::Event> events, std::unordered_map<std::string, std::string> personNames);
+	std::optional<EventChange> consumeEventChange();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -418,7 +434,6 @@ private:
 	std::optional<std::pair<gedcomx::Person, std::string>> personEditResult_;
 
 	void renderPersonEditorTopStrip(const std::vector<gedcomx::SourceDescription>& knownSources);
-	void renderPersonEditorEventsTab();
 	void renderPersonEditorNamesTab();
 	void renderPersonEditorCitationsTab(const std::vector<gedcomx::SourceDescription>& knownSources);
 	void renderPersonEditorAttributesTab();
@@ -566,4 +581,15 @@ private:
 	std::string collectPlace(gedcomx::PlaceDescription& out) const;  // first problem, or "" when out can be saved
 	std::string placeTitleById(const std::string& id) const;
 	static bool renderDateInput(const char* id, gedcomx::Date& date, char* buffer, size_t bufferSize, float width);
+
+	// --- Events tab of the Person editor ---
+	std::optional<std::string> pendingPersonEventsRequest_;
+	std::string personEventsFor_;  // the person (row key) the list below belongs to
+	std::vector<gedcomx::Event> personEvents_;
+	std::unordered_map<std::string, std::string> eventPersonNames_;  // person row key -> name
+	std::optional<EventChange> eventChangeResult_;
+
+	std::string personEditorRowKey() const;  // "sourceId:id" of the person being edited, "" for a new one
+	void renderPersonEditorFactsTab();
+	void renderPersonEditorEventsTab();  // shared-events tab
 };
