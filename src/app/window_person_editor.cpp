@@ -474,6 +474,9 @@ void Window::renderPersonEditor(const std::vector<gedcomx::SourceDescription>& k
 			strncpy_s(factDateBuffer_, picked->original.c_str(), _TRUNCATE);
 		}
 
+		renderEventEditor(knownSources);  // in this order: the picker opens the editor on a later frame
+		renderExistinEventPicker();
+
 		ImGui::Separator();
 		bool noSource = selectedSourceIndex_ < 0 || selectedSourceIndex_ >= (int)knownSources.size();
 		bool noName = primaryGivenBuffer_[0] == '\0' && primarySurnameBuffer_[0] == '\0';

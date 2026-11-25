@@ -439,8 +439,7 @@ void App::refreshKnownPlaces() {
 	window_.setKnownPlaces(db_->loadAllPlaces());
 }
 
-void App::pushPersonEvents(const std::string& personRowKey) {
-	auto events = db_->loadEventsForPerson(personRowKey);
+std::unordered_map<std::string, std::string> App::namesForEvents(const std::vector<gedcomx::Event>& events) {
 	std::unordered_map<std::string, std::string> names;
 	for (const auto& e : events) {
 		for (const auto& role : e.roles) {
@@ -449,7 +448,19 @@ void App::pushPersonEvents(const std::string& personRowKey) {
 			names[role.personId] = person ? person->primaryFullText() : role.personId;
 		}
 	}
+	return names;
+}
+
+void App::pushPersonEvents(const std::string& personRowKey) {
+	auto events = db_->loadEventsForPerson(personRowKey);
+	auto names = namesForEvents(events);
 	window_.setPersonEvents(personRowKey, std::move(events), std::move(names));
+}
+
+void App::pushSourceEvents(const std::string& sourceId) {
+	auto events = db_->loadEventsForSource(sourceId);
+	auto names = namesForEvents(events);
+	window_.setSourceEvents(sourceId, std::move(events), names);
 }
 
 void App::run() {
@@ -909,6 +920,15 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Faile to save event: ") + e.what());
+			}
+		}
+
+		if (auto sourceId = window_.consumeSourceEventsRequest()) {
+			try {
+				pushSourceEvents(*sourceId);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load source events: ") + e.what());
 			}
 		}
 	}

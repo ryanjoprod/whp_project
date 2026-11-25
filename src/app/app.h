@@ -61,4 +61,7 @@ private:
 	std::unordered_map<std::string, std::vector<std::string>> aggregateContributingSourceIds_; // merged person id -> distinct source ids
 	std::vector<gedcomx::Relationship> aggregateVisibleRelationships_;
 	void rebuildAggregateView();
+
+	void pushSourceEvents(const std::string& sourceId);
+	std::unordered_map<std::string, std::string> namesForEvents(const std::vector<gedcomx::Event>& events);
 };

@@ -25,11 +25,18 @@ Each entry: decision, then the reason. Revisit only with a migration plan.
 19. **Place title is derived (`placeTitle`, `libs/gedcomx/place_logic.h`):** primary names up the FIRST parent chain, loop-safe. The parent picker excludes the place itself and its descendants (`placeDescendants`); the storage cycle guard (decision 14) is the backstop.
 20. **Places are managed under Data -> Places...** (filterable list with New and Edit; `PlaceEditorOwner::App` or `List` decides which scope renders the editor). There is no delete yet: `place_description_id` has no FK, so deleting needs a "who uses this place" check first. Places carry citations through the same Citation Editor (`CitationEditorOwner::Place`); modals nest Place Editor -> Citation Editor -> Date editor.
 
-## Priority once the input popups are finished
+21. **Facts and events are separate tabs.** In the Person editor, Facts = single-person conclusions (`person_facts`), Events = shared multi-person events. A merged list is still the long-term plan (decision 3). A fact stores a place as free text (`original`, what the source says) plus an optional link (`descriptionId`, picked with the shared place picker).
+22. **Events are edited from a person and saved immediately.** Event roles have a foreign key to the person, so an event cannot be saved for an unsaved person; the Events tab says "save the person first". Shared records (events, citations) save at OK and not with the person, so cancelling the person editor does not undo them.
+23. **Event Editor = the shared event + this person's role.** Opened from the Events tab (New event, Edit, Add existing event). It starts from the loaded event, so other people's roles, confidence and role notes survive. Other participants are read-only; each person joins an event from their own editor. One `EventChange` channel carries save, remove-from-event and delete; App deletes an event whose last role was removed. Loaded events carry row keys, new ones local ids; App converts to local ids only when the id really starts with `<sourceId>:` (`stripRowKeyPrefix` chops blindly). Modals nest Person editor -> Event Editor -> Citation Editor -> Date editor.
 
-- The main window's menu bar must always be available (check for modals blocking it; likely use `ImGui::BeginMainMenuBar()`).
-- The main window must behave like a normal window when resized or snapped (for example, dragging it to the left edge fills the left half): resizable SDL window, layout and render target follow the window size, sensible minimum size.
+## Priority once the input popups are finished (the popups are now done)
+
+Finding: the main window is created borderless (`SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE`) and its title bar is an ImGui window ("TitleBar", `window_titlebar.cpp`) with the menu, a maximize button and a close button. Dragging is done by hand (`SDL_GetGlobalMouseState`, `SDL_SetWindowPosition`). Consequences:
+- An open modal popup blocks input to every other ImGui window, so the menu bar, the maximize/close buttons and the drag area stop working while any editor is open.
+- The operating system does not know where the title bar or the resize borders are, so there is no native resize cursor, no snapping (drag to the left edge fills the left half) and no Windows snap layouts.
+
+Plan (to be confirmed): `SDL_SetWindowHitTest` tells the OS which strip is the caption and which edges resize, so native drag, resize and snap work and the hand-written drag code goes away; the window buttons and menu bar get a way to stay usable while a popup is open (see the open question about which of these the menu bar should do during modals); a minimum window size; layout follows the window size.
 
 ## Out of scope for v1 (parked)
 
-Gallery tab (after tree view and map view); export-all-sources (one file per source; check `person_links` in `gatherSourceExport` first); import that keeps existing values when the file is silent; export of places/agents/documents; non-Gregorian `date_sort` conversion; deleting places.
+Gallery tab (after tree view and map view); export-all-sources (one file per source; check `person_links` in `gatherSourceExport` first); import that keeps existing values when the file is silent; export of places/agents/documents; non-Gregorian `date_sort` conversion; deleting places; adding other people to an event from inside the Event Editor (people join from their own editor today).

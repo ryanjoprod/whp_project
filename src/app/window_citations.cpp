@@ -51,6 +51,7 @@ std::vector<gedcomx::SourceReference>& Window::citationTargetRefs() {
 	switch (citationEditorOwner_) {
 	case CitationEditorOwner::Relationship: return workingRelationship_.conclusion.sources;
 	case CitationEditorOwner::Place: return workingPlace_.conclusion.sources;
+	case CitationEditorOwner::Event: return workingEvent_.conclusion.sources;
 	default: return workingPerson_.conclusion.sources;
 	}
 }

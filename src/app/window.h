@@ -240,6 +240,12 @@ public:
 	}
 	void setPersonEvents(const std::string& personRowKey, std::vector<gedcomx::Event> events, std::unordered_map<std::string, std::string> personNames);
 	std::optional<EventChange> consumeEventChange();
+	std::optional<std::string> consumeSourceEventsRequest() {
+		auto request = pendingSourceEventsRequest_;
+		pendingSourceEventsRequest_.reset();
+		return request;
+	}
+	void setSourceEvents(const std::string& sourceId, std::vector<gedcomx::Event> events, const std::unordered_map<std::string, std::string>& personNames);
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -401,7 +407,7 @@ private:
 	int selectedSourceIndex_ = -1;
 
 	// --- Citation Editor (one popup, shared by the Person and Relationship editors) ---
-	enum class CitationEditorOwner { None, Person, Relationship, Place };
+	enum class CitationEditorOwner { None, Person, Relationship, Place, Event };
 
 	std::vector<gedcomx::Citation> knownCitations_;  // pushed by App; includes bare citations
 	std::string lastCitedSourceId_;  // preselected the next time the editor opens
@@ -528,7 +534,7 @@ private:
 	void renderReferencesTab(const std::vector<storage::Reference>& refs, bool showCitationColumn);
 
 	// --- Date Editor (one popup, opened from any date field) ---
-	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent, PersonFact, RelationshipFact };
+	enum class DateEditorTarget { None, Citation, PlaceName, PlaceParent, PersonFact, RelationshipFact, Event };
 
 	DateEditorTarget dateEditorTarget_ = DateEditorTarget::None;
 	bool showDateEditor_ = false;
@@ -592,4 +598,33 @@ private:
 	std::string personEditorRowKey() const;  // "sourceId:id" of the person being edited, "" for a new one
 	void renderPersonEditorFactsTab();
 	void renderPersonEditorEventsTab();  // shared-events tab
+
+	// --- Event Editor: the person's reference to a shared event ---
+	bool showEventEditor_ = false;
+	gedcomx::Event workingEvent_;  // loaded (row keeys) or new (empty id); keeps other people's roles
+	std::string eventEditorPersonKey_;
+	int eventMyRoleIndex_ = -1;  // index into workingEvent_.roles; -1 = this person is being added
+	int eventTypeIndex_ = 0;
+	char eventTypeCustomBuffer_[256] = "";
+	char eventDescriptionBuffer_[256] = "";
+	gedcomx::Date eventDate_;
+	char eventDateBuffer_[128] = "";
+	char eventPlaceBuffer_[128] = "";
+	std::string eventPlaceId_;
+	int eventRoleIndex_ = 0;
+	char eventRoleCustomBuffer_[256] = "";
+	char eventRoleDetailsBuffer_[256] = "";
+	std::vector<EditableNote> eventNotes_;
+
+	std::optional<std::string> pendingSourceEventsRequest_;
+	std::string sourceEventsFor_;
+	std::vector<gedcomx::Event> sourceEvents_;
+	bool showExistingEventPicker_ = false;
+	std::string existingEventSelected_;
+	char existingEventFilter_[64] = "";
+
+	void openEventEditor(const gedcomx::Event* existing);
+	void renderEventEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
+	void renderExistinEventPicker();
+	std::string collectEvent(gedcomx::Event& out) const;  // first problem, or "" when out can be saved
 };
