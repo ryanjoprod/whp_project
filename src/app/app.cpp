@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <iostream>
 #include <tuple>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 #include "app.h"
 #include "logger.h"
@@ -106,6 +109,41 @@ void App::saveProject() {
 
 	std::ofstream out(projectFilePath());
 	out << serializeProject(*currentProject_);
+}
+
+// Copies the whole project into a new timestamped folder under destinationFolder. The copy is itself a
+// valid project (same layout), so restoring is just opening its .whproj.
+void App::backUpProject(const std::string& destinationFolder) {
+	if (!currentProject_ || !db_) return;
+
+	saveProject();  // so the .whproj in the backup matches what is on screen
+
+	std::time_t now = std::time(nullptr);
+	std::tm local{};
+	localtime_s(&local, &now);
+	std::ostringstream stamp;
+	stamp << std::put_time(&local, "%Y%m%d_%H%M%S");
+
+	const std::string backupName = currentProject_->projectName + "_backup_" + stamp.str();
+	const std::string backupFolder = destinationFolder + "/" + backupName;
+	if (fs::exists(backupFolder))
+		throw std::runtime_error("Backup folder already exists: " + backupFolder);
+	fs::create_directories(backupFolder);
+
+	const std::string& projectFolder = currentProject_->projectFolder;
+
+	db_->backupTo(backupFolder + "/" + currentProject_->dbFile);  // a consistent copy of the open database
+
+	const std::string whprojName = currentProject_->projectName + ".whproj";
+	fs::copy_file(projectFolder + "/" + whprojName, backupFolder + "/" + whprojName, fs::copy_options::overwrite_existing);
+
+	if (fs::exists(projectFolder + "/sources"))
+		fs::copy(projectFolder + "/sources", backupFolder + "/sources", fs::copy_options::recursive);
+
+	if (fs::exists(projectFolder + "/physics_settings.json"))
+		fs::copy_file(projectFolder + "/physics_settings.json", backupFolder + "/physics_settings.json");
+
+	Logger::log(LogLevel::Info, "Project backed up to: " + backupFolder);
 }
 
 void App::closeCurrentProject() {
@@ -969,6 +1007,15 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load source events: ") + e.what());
+			}
+		}
+
+		if (auto backupFolder = window_.consumeBackupRequest()) {
+			try {
+				backUpProject(*backupFolder);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Backup failed: ") + e.what());
 			}
 		}
 	}

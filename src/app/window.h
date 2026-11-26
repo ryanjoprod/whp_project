@@ -104,6 +104,8 @@ public:
 	std::optional<std::pair<std::string, std::string>> consumeNewProjectRequest();
 	void requestSaveProject() { saveProjectRequested_ = true; }
 	bool consumeSaveProjectRequest();
+	void requestBackupDialog();
+	std::optional<std::string> consumeBackupRequest();  // the folder the user picked, once
 
 	// Call this instead of acting immediately, whenever a New/Open Project
 	// request meeds to first confirm discarding unsaved session state.
@@ -348,6 +350,10 @@ private:
 	bool switchConfirmRequested_ = false;
 
 	void renderNewProjectModal();
+
+	std::mutex backupMutex_;
+	std::optional<std::string> pendingBackupFolder_;
+	static void handleBackupFolderDialogResult(void* userdata, const char* const* filelist, int filter);
 
 	// Switch projects
 	bool showSwitchConfirmModal_ = false;

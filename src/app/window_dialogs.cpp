@@ -118,6 +118,27 @@ bool Window::consumeSaveProjectRequest() {
     return result;
 }
 
+// --- Back Up Project ---
+
+void Window::requestBackupDialog() {
+    SDL_ShowOpenFolderDialog(&Window::handleBackupFolderDialogResult, this, window_, nullptr, false);
+}
+
+void Window::handleBackupFolderDialogResult(void* userdata, const char* const* filelist, int filter) {
+    Window* self = static_cast<Window*>(userdata);
+    if (!filelist || !filelist[0]) return;
+
+    std::lock_guard<std::mutex> lock(self->backupMutex_);
+    self->pendingBackupFolder_ = filelist[0];
+}
+
+std::optional<std::string> Window::consumeBackupRequest() {
+    std::lock_guard<std::mutex> lock(backupMutex_);
+    std::optional<std::string> result = pendingBackupFolder_;
+    pendingBackupFolder_.reset();
+    return result;
+}
+
 // --- Project Switch ---
 
 void Window::confirmProjectSwitch(std::function<void()> onConfirmed) {

@@ -30,6 +30,7 @@ private:
 	void newProject(const std::string& folderPath, const std::string& projectName);
 	void openProject(const std::string& whprojPath);
 	void saveProject();
+	void backUpProject(const std::string& destinationFolder);
 	void closeCurrentProject();
 
 	std::string projectFilePath() const;  // helper: projectFolder + "/" + projectName + ".whproj"

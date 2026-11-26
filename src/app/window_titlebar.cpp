@@ -46,6 +46,9 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
             if (ImGui::MenuItem("Export Source...")) {
                 requestExportModal();
             }
+            if (ImGui::MenuItem("Back Up Project...")) {
+                requestBackupDialog();
+            }
             ImGui::EndDisabled();
             ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
