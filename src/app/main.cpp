@@ -1,22 +1,25 @@
-#include <iostream>
 #include <fstream>
+#include <iterator>
+#include <string>
 
 #include "app.h"
-#include "app_settings.h"
+#include "app_paths.h"
 #include "logger.h"
+#include "window_state.h"
 
 int main() {
 	Logger::init("whp_program.log");
 
-	AppSettings appSettings;
-	std::ifstream settingsFile("app_settings.json");
-	if (settingsFile) {
-		std::string jsonText((std::istreambuf_iterator<char>(settingsFile)), std::istreambuf_iterator<char>());
-		appSettings = deserializeAppSettings(jsonText);
+	WindowState windowState;
+	std::ifstream stateFile(userDataFolder() / "window_state.json");
+
+	if (stateFile) {
+		std::string jsonText((std::istreambuf_iterator<char>(stateFile)), std::istreambuf_iterator<char>());
+		windowState = deserializeWindowState(jsonText);
 	}
 
 	try {
-		App app(appSettings);
+		App app(windowState);
 		app.run();
 	}
 	catch (const std::exception& e) {

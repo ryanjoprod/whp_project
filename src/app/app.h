@@ -7,13 +7,15 @@
 #include <set>
 
 #include "window.h"
+#include "window_state.h"
 #include "project.h"
+
 #include "storage/database.h"
 #include "gedcomx/person.h"
 
 class App {
 public:
-	explicit App(const AppSettings& settings);
+	explicit App(const WindowState& windowState);
 	void run();
 
 private:
@@ -31,6 +33,8 @@ private:
 	void closeCurrentProject();
 
 	std::string projectFilePath() const;  // helper: projectFolder + "/" + projectName + ".whproj"
+	std::string physicsSettingsPath() const;  // in the project folder; empty with no project
+	void loadPhysicsSettings();
 
 	size_t maxVisibleNodes_ = 200;  // this is how many people are visible on the screen at once
 

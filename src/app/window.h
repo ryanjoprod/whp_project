@@ -25,6 +25,7 @@
 
 #include "camera.h"
 #include "app_settings.h"
+#include "window_state.h"
 
 struct EditableNote {
 	std::string lang;
@@ -72,12 +73,13 @@ struct EventChange {
 
 class Window {
 public:
-	Window();
+	explicit Window(const WindowState& saved = WindowState());
 	~Window();																				   
 
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
 
+	WindowState captureWindowState();  // current normal rectangle and maximized flag, for savin at exit
 	enum class ViewMode { AllSources, Aggregate, SingleSource };
 
 	bool isRunning() const;
@@ -258,6 +260,9 @@ private:
 	static constexpr int kResizeBorder = 6;
 	static constexpr int kMinWindowWidth = 720;
 	static constexpr int kMinWindowHeight = 420;
+	void updateNormalRect();
+	IntRect normalRect_;
+	bool maximized_ = false;
 
 	// Redraw functions
 	std::function<void()> liveRedraw_;

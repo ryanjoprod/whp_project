@@ -4,6 +4,7 @@ find_package(imgui CONFIG REQUIRED)
 add_executable(app 
 	main.cpp
 	app.cpp
+	app_paths.cpp
 	camera.cpp
 	project.cpp
 	logger.cpp

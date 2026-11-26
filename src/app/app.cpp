@@ -10,18 +10,22 @@
 #include "app.h"
 #include "logger.h"
 #include "app_settings.h"
+#include "app_paths.h"
 #include "id_generator.h"
 #include "gedcomx/parser.h"
 
 namespace fs = std::filesystem;
 
-App::App(const AppSettings& settings) : window_() {
-	window_.setPhysicsSettings(settings);
-}
+App::App(const WindowState& windowState) : window_(windowState) {}
 
 std::string App::projectFilePath() const {
 	if (!currentProject_) return "";
 	return currentProject_->projectFolder + "/" + currentProject_->projectName + ".whproj";
+}
+
+std::string App::physicsSettingsPath() const {
+	if (!currentProject_) return "";
+	return currentProject_->projectFolder + "/physics_settings.json";
 }
 
 void App::newProject(const std::string& folderPath, const std::string& projectName) {
@@ -38,6 +42,7 @@ void App::newProject(const std::string& folderPath, const std::string& projectNa
 
 	db_ = std::make_unique<storage::Database>(projectFolder + "/" + project.dbFile);
 	currentProject_ = project;
+	loadPhysicsSettings();
 
 	saveProject();  // write the initial .whproj immediately
 }
@@ -61,6 +66,7 @@ void App::openProject(const std::string& whoprojPath) {
 	}
 
 	currentProject_ = loaded;
+	loadPhysicsSettings();
 	db_ = std::make_unique<storage::Database>(projectFolder + "/" + currentProject_->dbFile);
 
 	knownSources_ = db_->loadAllSourceDescriptions();
@@ -103,6 +109,7 @@ void App::saveProject() {
 }
 
 void App::closeCurrentProject() {
+	window_.setPhysicsSettings(AppSettings());
 	db_.reset();  // closes the database connection
 	currentProject_.reset();
 	visiblePeopleMap_.clear();
@@ -114,6 +121,19 @@ void App::closeCurrentProject() {
 	knownCitations_.clear();
 	window_.setKnownCitations(knownCitations_);
 	window_.setKnownPlaces({});
+}
+
+void App::loadPhysicsSettings() {
+	AppSettings settings;  // defaults
+	const std::string path = physicsSettingsPath();
+	if (!path.empty()) {
+		std::ifstream file(path);
+		if (file) {
+			std::string jsonText((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+			settings = deserializeAppSettings(jsonText);
+		}
+	}
+	window_.setPhysicsSettings(settings);
 }
 
 void App::loadNeighborhood(const std::string& rootPersonKey, int depth) {						
@@ -464,7 +484,7 @@ void App::pushSourceEvents(const std::string& sourceId) {
 }
 
 void App::renderFrame() {
-	auto t0 = SDL_GetTicksNS();
+	// auto t0 = SDL_GetTicksNS();
 
 	window_.beginFrame();
 	window_.renderTitleBarAndMenu(knownSources_);
@@ -496,9 +516,11 @@ void App::renderFrame() {
 	window_.renderDeleteConfirmModal();
 	window_.endFrame();
 
+	/*
 	auto ms = (SDL_GetTicksNS() - t0) / 1000000;
 	if (ms > 50)
 		Logger::log(LogLevel::Warning, "Slow frame: " + std::to_string(ms) + " ms");
+	*/
 }
 
 void App::run() {
@@ -581,8 +603,14 @@ void App::run() {
 		}
 
 		if (window_.consumeSaveSettingsRequest()) {
-			std::ofstream out("app_settings.json");
-			out << serializeAppSettings(window_.physicsSettings());
+			const std::string path = physicsSettingsPath();
+			if (path.empty()) {
+				Logger::log(LogLevel::Warning, "Open or create a project first: physics settings are saved in the project folder.");
+			}
+			else {
+				std::ofstream out(path);
+				out << serializeAppSettings(window_.physicsSettings());
+			}
 		}
 
 		for (const auto& path : window_.consumeOpenedFiles()) {
@@ -946,6 +974,10 @@ void App::run() {
 	}
 
 	window_.setLiveRedraw(nullptr);
+	{
+		std::ofstream out(userDataFolder() / "window_state.json");
+		out << serializeWindowState(window_.captureWindowState());
+	}
 
 	try {
 		saveProject();

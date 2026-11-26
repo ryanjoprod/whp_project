@@ -1,17 +1,61 @@
 #include <stdexcept>
 #include <algorithm>
+#include <vector>
 
 #include "imgui_internal.h"  // FindWindowByName: lets us read where a popup currently is
 
 #include "window.h"
 #include "logger.h"
 
-Window::Window() {
+namespace {
+	// Useable area of every connected monitor, primary FIRST (what fitRectToDisplays expects).
+	static std::vector<IntRect> useableDisplays() {
+		std::vector<IntRect> result;
+		const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
+		int count = 0;
+		SDL_DisplayID* ids = SDL_GetDisplays(&count);
+		if (!ids) return result;
+
+		auto add = [&result](SDL_DisplayID id) {
+			SDL_Rect r;
+			if (SDL_GetDisplayUsableBounds(id, &r))
+				result.push_back({ r.x, r.y, r.w, r.h });
+		};
+		add(primary);
+		for (int i = 0; i < count; ++i)
+			if (ids[i] != primary)
+				add(ids[i]);
+		SDL_free(ids);
+		return result;
+	}
+}
+
+Window::Window(const WindowState& saved) {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
 	}
 
-	window_ = SDL_CreateWindow("WHP - Geneaology Visualizer", 1280, 720, SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE);
+	SDL_PropertiesID props = SDL_CreateProperties();
+	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, "WHP - Geneaoloy Visualizer");
+	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+
+	IntRect start = { 0, 0, 1280, 720 };
+	if (saved.valid) {
+		// the saved spot may belong to a monitor that is gone or a different resolution
+		start = fitRectToDisplays(saved.rect, useableDisplays(), kMinWindowWidth, kMinWindowHeight);
+		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, start.x);
+		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, start.y);
+		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, saved.maximized);
+	}
+	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, start.w);
+	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, start.h);
+
+	window_ = SDL_CreateWindowWithProperties(props);
+	SDL_DestroyProperties(props);
+	normalRect_ = start;
+	maximized_ = saved.valid && saved.maximized;
+
 	if (!window_) {
 		SDL_Quit();
 		throw std::runtime_error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
@@ -129,6 +173,35 @@ bool SDLCALL Window::eventWatch(void* userdata, SDL_Event* event) {
 	return true;
 }
 
+void Window::updateNormalRect() {
+	const SDL_WindowFlags flags = SDL_GetWindowFlags(window_);
+	maximized_ = (flags & SDL_WINDOW_MAXIMIZED) != 0;
+	// While maximized, minimized or fullscreen SDL reports that state's rectangle: keep the last normal one.
+	if (flags & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED | SDL_WINDOW_FULLSCREEN)) return;
+	int x = 0, y = 0, w = 0, h = 0;
+	SDL_GetWindowPosition(window_, &x, &y);
+	SDL_GetWindowSize(window_, &w, &h);
+	if (w > 0 && h > 0)
+		normalRect_ = { x, y, w, h };
+}
+
+WindowState Window::captureWindowState() {
+	updateNormalRect();
+	WindowState state;
+	state.valid = true;
+	state.rect = normalRect_;
+	state.maximized = maximized_;
+
+	/*
+	Logger::log(LogLevel::Info, "Saving window state: maximized=" + std::to_string(state.maximized)
+		+ " rect=" + std::to_string(normalRect_.x) + "," + std::to_string(normalRect_.y) + ","
+		+ std::to_string(normalRect_.w) + "x" + std::to_string(normalRect_.h)
+		+ " flags=" + std::to_string(static_cast<unsigned long long>(SDL_GetWindowFlags(window_))));
+	*/
+
+	return state;
+}
+
 bool Window::isRunning() const {
 	return running_;
 }
@@ -142,6 +215,7 @@ void Window::processEvents() {
 			running_ = false;
 		}
 	}
+	updateNormalRect();
 	allowLiveRedraw_ = false;
 }
 
