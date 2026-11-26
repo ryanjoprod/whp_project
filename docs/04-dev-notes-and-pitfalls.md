@@ -26,6 +26,10 @@ Everything inside a SQL string compiles. Real bugs found so far, so check these 
 - `storage::stripRowKeyPrefix(rowKey, sourceId)` is `substr(sourceId.size() + 1)`: it chops blindly, so only call it on a real row key. For an id that may already be local, check that it starts with `<sourceId>:` first.
 - `strncpy_s(dest, text, sizeof(wrongThing) - 1)`: the count must be the DESTINATION buffer's size; use `_TRUNCATE` so long text can never trip the CRT's invalid-parameter handler.
 - Never build the object you save from the form alone: start from the loaded copy (`workingPlace_`, `workingEvent_`, the existing fact) and overwrite only what the form edits, or fields the form does not show are lost.
+- `(flags && SDL_WINDOW_MAXIMIZED)` compiles and is true whenever ANY flag is set; a bit test needs `&`. A bitwise test mistyped as `&&` shows up only as "always true", so log the raw value when a flag check misbehaves.
+- A log line placed after `return` never runs. When a debug line does not appear, check that it is reachable before suspecting the logger.
+- Save and load paths must come from one helper (`userDataFolder()`); one side keeping a relative path means the file is written but never read.
+- Pure logic that must be tested (`fitRectToDisplays`) lives in its own `.cpp` with no SDL, ImGui or logger includes, and is added to both the `app` and `whp_tests` targets.
 
 ## Quick schema check
 

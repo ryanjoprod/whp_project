@@ -72,6 +72,9 @@ namespace storage {
 		Database(Database&&) noexcept;
 		Database& operator=(Database&&) noexcept;
 
+		// Writes a consistent copy of this database to a NEW file; throws if the file exists.
+		void backupTo(const std::string& targetPath);
+
 		void save(const gedcomx::Person& person, const std::string& sourceId);
 		std::vector<gedcomx::Person> loadAll();
 		std::optional<gedcomx::Person> loadPerson(const std::string& personKey);

@@ -1152,6 +1152,12 @@ namespace storage {
 				return out;
 		}
 
+		void backupTo(const std::string& target) {
+			if (std::filesystem::exists(std::filesystem::path(std::u8string(target.begin(), target.end()))))
+				throw std::runtime_error("Backup target already exists: " + target);
+			vacuumInto(target);
+		}
+
 	private:
 		sqlite3* db_ = nullptr;
 		std::string path_;
@@ -1257,18 +1263,23 @@ namespace storage {
 			}
 		}
 
+		// A consistent copy of the open database (works while it is in use). VACUUM INTO refuses an existing file
+		void vacuumInto(const std::string& target) {
+			std::string quoted;
+			for (char c : target) {
+				if (c == '\'') quoted += '\'';
+				quoted += c;
+			}
+			exec("VACUUM INTO '" + quoted + "';");
+		}
+
 		std::string backupBeforeUpgrade(int from) {
 			if (path_.empty() || path_ == ":memory:") return "";
 
 			const std::string target = path_ + ".v" + std::to_string(from) + ".bak";
 			std::filesystem::remove(target);  // VACUUM INTO refuses to overwrite a file
 
-			std::string quoted;
-			for (char c : target) {
-				if (c == '\'') quoted += '\'';
-				quoted += c;
-			}
-			exec("VACUUM INTO '" + quoted + "';");  // a consistent copy of the open database
+			vacuumInto(target);
 			return target;
 		}
 
@@ -1553,6 +1564,10 @@ namespace storage {
 
 	Database::Database(Database&&) noexcept = default;
 	Database& Database::operator=(Database&&) noexcept = default;
+
+	void Database::backupTo(const std::string& targetPath) {
+		impl_->backupTo(targetPath);
+	}
 
 	void Database::save(const gedcomx::Person& person, const std::string& sourceId) {
 		impl_->save(person, sourceId);
