@@ -3,6 +3,8 @@ find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 add_executable(whp_tests
 	test_main.cpp
+	app/test_window_state.cpp
+	${CMAKE_SOURCE_DIR}/src/app/window_state.cpp
 	gedcomx/test_person_parser.cpp
 	gedcomx/test_fact_serializer.cpp
 	gedcomx/test_person_serializer.cpp
@@ -14,6 +16,7 @@ add_executable(whp_tests
 	gedcomx/test_place_remap.cpp
 	gedcomx/test_place_serializer.cpp
 	gedcomx/test_date_parts.cpp
+	gedcomx/test_place_logic.cpp
 	storage/test_person_storage.cpp
 	storage/test_aggregate_storage.cpp
 	storage/test_relationship_storage.cpp
@@ -25,8 +28,7 @@ add_executable(whp_tests
 	storage/test_schema_version.cpp
 	storage/test_migrations.cpp
 	storage/test_place_import.cpp
-	gedcomx/test_place_logic.cpp
 )
 
-target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src/app)
 target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest unofficial::sqlite3::sqlite3)
