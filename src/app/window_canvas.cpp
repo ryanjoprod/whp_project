@@ -35,6 +35,9 @@ namespace {
         }
         return result;
     }
+
+    constexpr float kTreeSpacingX = 140.0f;  // world units per person-width of the tree layout
+    constexpr float kTreeSpacingY = 120.0f;  // world units per row
 }
 
 void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
@@ -127,6 +130,37 @@ void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std:
     }
 }
 
+// Tree layout: the positions come from gedcomx::layoutTree. They are recomputed only when what they depend
+// on changed (the people shown, their couple and parent links, or the root), and set on every node each frame.
+void Window::applyTreeLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
+    gedcomx::TreeLayoutInput input;
+    input.rootId = rootPersonId_;
+    for (const auto& person : people)
+        input.people.push_back(person.id);
+    for (const auto& rel : relationships) {
+        if (rel.type == gedcomx::kParentChildType)
+            input.parentChild.emplace_back(rel.person1Id, rel.person2Id);
+        else if (rel.type == "http://gedcomx.org/Couple")
+            input.couples.emplace_back(rel.person1Id, rel.person2Id);
+    }
+
+    const bool unchanged = input.people == lastTreeInput_.people
+        && input.couples == lastTreeInput_.couples
+        && input.parentChild == lastTreeInput_.parentChild
+        && input.rootId == lastTreeInput_.rootId;
+    if (!unchanged) {
+        treePoints_ = gedcomx::layoutTree(input);
+        lastTreeInput_ = std::move(input);
+    }
+
+    for (const auto& person : people) {
+        auto it = treePoints_.find(person.id);
+        if (it == treePoints_.end()) continue;
+        nodePositions_[person.id] = ImVec2(static_cast<float>(it->second.x) * kTreeSpacingX, static_cast<float>(it->second.y) * kTreeSpacingY);
+        nodeVelocities_[person.id] = ImVec2(0.0f, 0.0f);  // so the graph layout starts calm if you switch back
+    }
+}
+
 void Window::renderCanvas(
     const std::vector<gedcomx::Person>& people,
     const std::vector<gedcomx::Relationship>& relationships,
@@ -173,7 +207,10 @@ void Window::renderCanvas(
     ImVec2 canvasSize = ImGui::GetWindowSize();
     camera_.setViewport(canvasOrigin, canvasSize);
 
-    updateLayout(people, relationships);
+    if (layoutMode_ == LayoutMode::Tree)
+        applyTreeLayout(people, relationships);
+    else
+        updateLayout(people, relationships);
 
     std::unordered_set<std::string> currentIds;
     for (const auto& person : people) currentIds.insert(person.id);
@@ -219,8 +256,10 @@ void Window::renderCanvas(
 
     if (!draggedNodeId_.empty()) {
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            nodePositions_[draggedNodeId_] = camera_.screenToWorld(mousePos);
-            nodeVelocities_[draggedNodeId_] = ImVec2(0, 0);
+            if (layoutMode_ == LayoutMode::Graph) {  // the tree layout owns the positions
+                nodePositions_[draggedNodeId_] = camera_.screenToWorld(mousePos);
+                nodeVelocities_[draggedNodeId_] = ImVec2(0, 0);
+            }
         }
         else {
             float dx = mousePos.x - dragStartMousePos_.x;

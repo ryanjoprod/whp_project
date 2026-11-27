@@ -6,6 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <functional>
+#include <map>
 
 #include <sdl3/SDL.h>
 #include <imgui.h>
@@ -22,6 +23,7 @@
 #include "gedcomx/date_parts.h"
 #include "gedcomx/place_logic.h"
 #include "gedcomx/event.h"
+#include "gedcomx/tree_layout.h"
 
 #include "camera.h"
 #include "app_settings.h"
@@ -93,6 +95,7 @@ public:
 	// Window resize and reframe
 	std::string consumeReRootRequest();
 	void requestRefit() { needsRefit_ = true; }
+	void setRootPerson(const std::string & id) { rootPersonId_ = id; }  // the person the view is centered on
 	
 	// File menu requests
 	void requestOpenFileDialog();
@@ -206,6 +209,12 @@ public:
 	// View mode
 	ViewMode viewMode() const { return viewMode_; }
 	std::string viewModeSourceId() const { return viewModeSourceId_; }
+	enum class LayoutMode { Graph, Tree };
+	LayoutMode layoutMode_ = LayoutMode::Graph;
+	std::string rootPersonId_;
+	gedcomx::TreeLayoutInput lastTreeInput_;  // what the tree positions below were computed from
+	std::map<std::string, gedcomx::TreePoint> treePoints_;
+	void applyTreeLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships);
 
 	// Go to person
 	void requestGoToPersonModal() {

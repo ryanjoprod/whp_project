@@ -533,6 +533,7 @@ void App::renderFrame() {
 	// auto t0 = SDL_GetTicksNS();
 
 	window_.beginFrame();
+	window_.setRootPerson(currentRootKey_);
 	window_.renderTitleBarAndMenu(knownSources_);
 	switch (window_.viewMode()) {
 	case Window::ViewMode::AllSources: {

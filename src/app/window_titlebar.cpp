@@ -89,6 +89,16 @@ void Window::renderTitleBarAndMenu(const std::vector<gedcomx::SourceDescription>
                 }
                 ImGui::EndMenu();
             }
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Layout")) {
+                if (ImGui::MenuItem("Graph (force-directed)", nullptr, layoutMode_ == LayoutMode::Graph)) {
+                    layoutMode_ = LayoutMode::Graph;
+                }
+                if (ImGui::MenuItem("Tree (generation)", nullptr, layoutMode_ == LayoutMode::Tree)) {
+                    layoutMode_ = LayoutMode::Tree;
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
         const bool dataMenuOpen = ImGui::BeginMenu("Data");
