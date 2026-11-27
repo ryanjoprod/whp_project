@@ -251,6 +251,13 @@ public:
 		return request;
 	}
 	void setSourceEvents(const std::string& sourceId, std::vector<gedcomx::Event> events, const std::unordered_map<std::string, std::string>& personNames);
+	std::optional<std::string> consumeDetailsEventsRequest() {
+		auto request = pendingDetailsEventsRequest_;
+		pendingDetailsEventsRequest_.reset();
+		return request;
+	}
+	void setDetailsEvents(const std::string& personRowKey, std::vector<gedcomx::Event> events, const std::unordered_map<std::string, std::string>& personNames);
+	void invalidateDetailsEvents() { detailsEventsRequestedFor_.clear(); }  // the panel asks again next frame
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -628,6 +635,13 @@ private:
 	std::vector<gedcomx::Event> personEvents_;
 	std::unordered_map<std::string, std::string> eventPersonNames_;  // person row key -> name
 	std::optional<EventChange> eventChangeResult_;
+
+	std::optional<std::string> pendingDetailsEventsRequest_;
+	std::string detailsEventsRequestedFor_;  // the person we last asked about; cleared to force a reload
+	std::string detailsEventsFor_;  // the person the list below belongs to
+	std::vector<gedcomx::Event> detailsEvents_;
+	std::string eventSummary(const gedcomx::Event& event, const std::string& personRowKey) const;
+	std::string eventParticipants(const gedcomx::Event& event, const std::string& personRowKey) const;
 
 	std::string personEditorRowKey() const;  // "sourceId:id" of the person being edited, "" for a new one
 	void renderPersonEditorFactsTab();

@@ -71,4 +71,5 @@ private:
 
 	void pushSourceEvents(const std::string& sourceId);
 	std::unordered_map<std::string, std::string> namesForEvents(const std::vector<gedcomx::Event>& events);
+	void pushDetailsEvents(const std::string& personRowKey);
 };

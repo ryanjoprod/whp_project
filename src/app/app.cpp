@@ -159,6 +159,7 @@ void App::closeCurrentProject() {
 	knownCitations_.clear();
 	window_.setKnownCitations(knownCitations_);
 	window_.setKnownPlaces({});
+	window_.invalidateDetailsEvents();
 }
 
 void App::loadPhysicsSettings() {
@@ -513,12 +514,19 @@ void App::pushPersonEvents(const std::string& personRowKey) {
 	auto events = db_->loadEventsForPerson(personRowKey);
 	auto names = namesForEvents(events);
 	window_.setPersonEvents(personRowKey, std::move(events), std::move(names));
+	window_.invalidateDetailsEvents();
 }
 
 void App::pushSourceEvents(const std::string& sourceId) {
 	auto events = db_->loadEventsForSource(sourceId);
 	auto names = namesForEvents(events);
 	window_.setSourceEvents(sourceId, std::move(events), names);
+}
+
+void App::pushDetailsEvents(const std::string& personRowKey) {
+	auto events = db_->loadEventsForPerson(personRowKey);
+	auto names = namesForEvents(events);
+	window_.setDetailsEvents(personRowKey, std::move(events), names);
 }
 
 void App::renderFrame() {
@@ -653,6 +661,7 @@ void App::run() {
 
 		for (const auto& path : window_.consumeOpenedFiles()) {
 			try {
+				window_.invalidateDetailsEvents();
 				std::string newRoot = loadSourceFile(path);
 
 				if (!newRoot.empty()) {
@@ -975,6 +984,15 @@ void App::run() {
 			}
 			catch (const std::exception& e) {
 				Logger::log(LogLevel::Error, std::string("Failed to load events: ") + e.what());
+			}
+		}
+
+		if (auto personKey = window_.consumeDetailsEventsRequest()) {
+			try {
+				pushDetailsEvents(*personKey);
+			}
+			catch (const std::exception& e) {
+				Logger::log(LogLevel::Error, std::string("Failed to load events for the details panel: ") + e.what());
 			}
 		}
 

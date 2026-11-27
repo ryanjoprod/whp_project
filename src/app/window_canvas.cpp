@@ -427,6 +427,36 @@ void Window::renderDetailsPanel(
                 bulletWrapped(joinNonEmpty({ a.street, a.city, joinNonEmpty({ a.stateOrProvince, a.postalCode }, " "), a.country }, ", "));
         }
 
+        if (viewMode_ == ViewMode::Aggregate) {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Switch to All Sources or a single source to see events.");
+        }
+        else {
+            if (detailsEventsRequestedFor_ != person.id) {  // a new selection, or a forced reload
+                detailsEventsRequestedFor_ = person.id;
+                pendingDetailsEventsRequest_ = person.id;
+            }
+            if (detailsEventsFor_ != person.id) {
+                ImGui::Spacing();
+                ImGui::TextDisabled("Events: loading...");
+            }
+            else if (!detailsEvents_.empty()) {
+                ImGui::Spacing();
+                ImGui::Text("Events:");
+                for (const auto& event : detailsEvents_) {
+                    bulletWrapped(eventSummary(event, person.id));
+                    const std::string others = eventParticipants(event, person.id);
+                    if (!others.empty()) {
+                        ImGui::Indent();
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+                        ImGui::TextWrapped("With: %s", others.c_str());
+                        ImGui::PopStyleColor();
+                        ImGui::Unindent();
+                    }
+                }
+            }
+        }
+
         bool shownHeader = false;
         for (int r = 0; r < (int)relationships.size(); ++r) {
             const auto& rel = relationships[r];
@@ -549,7 +579,10 @@ void Window::renderDetailsPanel(
     }
     ImGui::End();
 
-    if (!open) selectedPersonId_.clear();
+    if (!open) {
+        selectedPersonId_.clear();
+        detailsEventsRequestedFor_.clear();  // reopening asks again
+    }
 }
 
 std::string Window::consumeReRootRequest() {
@@ -578,6 +611,36 @@ std::string Window::factSummary(const gedcomx::Fact& fact) const {
     const std::string detail = joinNonEmpty({ fact.date.original, where, fact.value }, " - ");
     const std::string label = gedcomx::formatTypeUri(fact.type);
     return detail.empty() ? label : label + ": " + detail;
+}
+
+// "Baptism: 5 May 1900 - Paris, France - description (Witness)". The rolw shows only when it is not Principal.
+std::string Window::eventSummary(const gedcomx::Event& event, const std::string& personRowKey) const {
+    std::string where = event.place.original;
+    if (!event.place.descriptionId.empty() && placeIndex_.count(event.place.descriptionId))
+        where = placeTitleById(event.place.descriptionId);
+
+    const std::string detail = joinNonEmpty({ event.date.original, where, event.description }, " - ");
+    std::string text = gedcomx::formatTypeUri(event.type);
+    if (!detail.empty()) text += ": " + detail;
+
+    for (const auto& role : event.roles) {
+        if (role.personId == personRowKey && !role.type.empty() && role.type != "http://gedcomx.org/Principal")
+            text += " (" + gedcomx::formatTypeUri(role.type) + ")";
+    }
+
+    return text;
+}
+
+// The other people in the event, by name ("" when this person is alone in it).
+std::string Window::eventParticipants(const gedcomx::Event& event, const std::string& personRowKey) const {
+    std::vector<std::string> names;
+    for (const auto& role : event.roles) {
+        if (role.personId == personRowKey) continue;
+        auto it = eventPersonNames_.find(role.personId);
+        names.push_back(it != eventPersonNames_.end() ? it->second : role.personId);
+    }
+
+    return joinNonEmpty(names, ", ");
 }
 
 void Window::renderContextMenus(const std::vector<gedcomx::Person>& people) {

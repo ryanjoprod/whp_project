@@ -60,6 +60,13 @@ void Window::setSourceEvents(const std::string& sourceId, std::vector<gedcomx::E
 		eventPersonNames_[entry.first] = entry.second;  // merged: the Events tab still needs its own
 }
 
+void Window::setDetailsEvents(const std::string& personRowKey, std::vector<gedcomx::Event> events, const std::unordered_map<std::string, std::string>& personNames) {
+	detailsEventsFor_ = personRowKey;
+	detailsEvents_ = std::move(events);
+	for (const auto& entry : personNames)
+		eventPersonNames_[entry.first] = entry.second;  // shared with the Events tab, so merge
+}
+
 std::optional<EventChange> Window::consumeEventChange() {
 	auto result = eventChangeResult_;
 	eventChangeResult_.reset();
