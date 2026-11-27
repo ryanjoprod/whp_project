@@ -3,6 +3,8 @@
 #include <cfloat>
 #include <unordered_set>
 #include <cmath>
+#include <map>
+#include <set>
 
 #include "window.h"
 #include "id_generator.h"
@@ -329,6 +331,21 @@ void Window::renderCanvas(
     const ImU32 coupleColor = IM_COL32(150, 150, 150, 255);  // gray
     const ImU32 parentChildColor = IM_COL32(214, 164, 84, 255);  // muted amber
 
+    // Tree mode: each child's parents, and which pairs are couples, so children can hang from the couple's midpoint.
+    std::map<std::string, std::vector<std::string>> parentsOf;
+    std::set<std::pair<std::string, std::string>> couplePairs;
+    if (layoutMode_ == LayoutMode::Tree) {
+        for (const auto& rel : relationships) {
+            if (rel.type == gedcomx::kParentChildType) {
+                parentsOf[rel.person2Id].push_back(rel.person1Id);
+            }
+            else if (rel.type == "http://gedcomx.org/Couple") {
+                couplePairs.insert({ rel.person1Id, rel.person2Id });
+                couplePairs.insert({ rel.person2Id, rel.person1Id });
+            }
+        }
+    }
+
     for (const auto& rel : relationships) {
         auto it1 = nodePositions_.find(rel.person1Id);
         auto it2 = nodePositions_.find(rel.person2Id);
@@ -336,6 +353,31 @@ void Window::renderCanvas(
 
         const ImVec2 a = camera_.worldToScreen(it1->second);  // person1: the parent
         const ImVec2 b = camera_.worldToScreen(it2->second);  // person2: the child
+
+        if (layoutMode_ == LayoutMode::Tree) {
+            const float nodeR = nodeRadius * camera_.zoom();
+
+            // Start at the midpoint of the couple if this parent has a partner who is also this child's parent
+            ImVec2 anchor = a;
+            for (const auto& other : parentsOf[rel.person2Id]) {
+                if (other == rel.person1Id || !couplePairs.count({ rel.person1Id, other })) continue;
+                auto ot = nodePositions_.find(other);
+                if (ot == nodePositions_.end()) continue;
+                const ImVec2 o = camera_.worldToScreen(ot->second);
+                anchor = ImVec2((a.x + o.x) * 0.5f, (a.y + o.y) * 0.5f);
+                break;
+            }
+
+            const float childTop = b.y - nodeR;
+            if (childTop > anchor.y + 1.0f) {  // child is below: draw the elbow
+                const float busY = anchor.y + (childTop - anchor.y) * 0.5f;
+                drawList->AddLine(anchor, ImVec2(anchor.x, busY), parentChildColor, 2.0f);
+                drawList->AddLine(ImVec2(anchor.x, busY), ImVec2(b.x, busY), parentChildColor, 2.0f);
+                drawList->AddLine(ImVec2(b.x, busY), ImVec2(b.x, childTop), parentChildColor, 2.0f);
+                continue;
+            }
+            // otherwise fall through to the straight arrow
+        }
 
         if (rel.type != gedcomx::kParentChildType) {
             drawList->AddLine(a, b, coupleColor, 2.0f);
