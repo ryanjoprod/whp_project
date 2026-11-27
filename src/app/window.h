@@ -433,6 +433,7 @@ private:
 	int editingFactIndex_ = -1;  // -1 = adding; >=0 = editing that index
 	gedcomx::Date factDate_;  // the structure date; the buffer is just what the text box show
 	std::string factPlaceId_;  // the linked place ("" = none); factPlaceBuffer_ stays what the source says
+	std::string factSummary(const gedcomx::Fact& fact) const;  // "Birth: 22 February 1732 - Paris, France"
 
 	void resetFactForm();
 	bool renderPlacePicker(const char* id, std::string& placeId, const std::unordered_set<std::string>* excluded, float width);

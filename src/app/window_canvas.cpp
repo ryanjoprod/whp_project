@@ -19,6 +19,22 @@ namespace {
         float cy = a.y + t * aby - p.y;
         return cx * cx + cy * cy;
     }
+
+    void bulletWrapped(const std::string& text) {
+        ImGui::Bullet();
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", text.c_str());
+    }
+
+    std::string joinNonEmpty(const std::vector<std::string>& parts, const char* separator) {
+        std::string result;
+        for (const auto& part : parts) {
+            if (part.empty()) continue;
+            if (!result.empty()) result += separator;
+            result += part;
+        }
+        return result;
+    }
 }
 
 void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
@@ -376,15 +392,39 @@ void Window::renderDetailsPanel(
             ImGui::TextDisabled("Source: %s", sourceLabel.c_str());
         }
 
+        if (!person.names.empty()) {
+            const gedcomx::Name& main = person.names[0];
+            if (!main.title.empty())
+                ImGui::TextDisabled("Title: %s", main.title.c_str());
+            if (!main.nickName.empty())
+                ImGui::TextDisabled("Nickname: %s", main.nickName.c_str());
+            if (!main.callName.empty())
+                ImGui::TextDisabled("Call name: %s", main.callName.c_str());
+        }
+        if (person.gender)
+            ImGui::TextDisabled("Gender: %s", gedcomx::formatTypeUri(person.gender->type).c_str());
+        for (size_t i = 1; i < person.names.size(); ++i) {
+            if (!person.names[i].nameForms.empty())
+                ImGui::TextDisabled("Also known as: %s", person.names[i].nameForms[0].fullText.c_str());
+        }
+
         if (!person.facts.empty()) {
             ImGui::Spacing();
             ImGui::Text("Facts:");
-            for (const auto& fact : person.facts) {
-                ImGui::BulletText("%s: %s %s",
-                    gedcomx::formatTypeUri(fact.type).c_str(),
-                    fact.date.original.c_str(),
-                    fact.place.original.c_str());
-            }
+            for (const auto& fact : person.facts) bulletWrapped(factSummary(fact));
+        }
+
+        if (!person.attributes.empty()) {
+            ImGui::Spacing();
+            ImGui::Text("Attributes:");
+            for (const auto& a : person.attributes) bulletWrapped(a.type + ": " + a.value);
+        }
+
+        if (!person.addresses.empty()) {
+            ImGui::Spacing();
+            ImGui::Text("Addresses:");
+            for (const auto& a : person.addresses)
+                bulletWrapped(joinNonEmpty({ a.street, a.city, joinNonEmpty({ a.stateOrProvince, a.postalCode }, " "), a.country }, ", "));
         }
 
         bool shownHeader = false;
@@ -405,9 +445,10 @@ void Window::renderDetailsPanel(
             }
             ImGui::PushID(r);
             ImGui::BulletText("%s", pit != people.end() ? pit->primaryFullText().c_str() : partnerId.c_str());
-            for (const auto& f : rel.facts) {
-                ImGui::BulletText("  %s: %s %s", gedcomx::formatTypeUri(f.type).c_str(), f.date.original.c_str(), f.place.original.c_str());
-            }
+            ImGui::Indent();
+            for (const auto& f : rel.facts) bulletWrapped(factSummary(f));
+            ImGui::Unindent();
+
             const bool aggregate = (viewMode_ == ViewMode::Aggregate);
             ImGui::BeginDisabled(pit == people.end() || aggregate);
             if (ImGui::SmallButton("Edit...") && pit != people.end() && !aggregate) {
@@ -525,6 +566,18 @@ bool Window::editMenuItem(const char* label, bool enabled, const char* verb) {
     if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("Switch to All Sources or a single source to %s", verb);
     return clicked && enabled && !aggregate;
+}
+
+// A linked place shows its full title ("Paris, Ile-de-France, France"); the type text is the fallback
+// for an unlinked place or a link that no longer resolves
+std::string Window::factSummary(const gedcomx::Fact& fact) const {
+    std::string where = fact.place.original;
+    if (!fact.place.descriptionId.empty() && placeIndex_.count(fact.place.descriptionId))
+        where = placeTitleById(fact.place.descriptionId);
+
+    const std::string detail = joinNonEmpty({ fact.date.original, where, fact.value }, " - ");
+    const std::string label = gedcomx::formatTypeUri(fact.type);
+    return detail.empty() ? label : label + ": " + detail;
 }
 
 void Window::renderContextMenus(const std::vector<gedcomx::Person>& people) {
