@@ -6,6 +6,7 @@ add_library(gedcomx STATIC
 	src/parent_child.cpp
 	src/date_parts.cpp
 	src/place_logic.cpp
+	src/tree_layout.cpp
 )
 
 target_include_directories(gedcomx PUBLIC include)

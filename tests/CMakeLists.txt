@@ -17,6 +17,7 @@ add_executable(whp_tests
 	gedcomx/test_place_serializer.cpp
 	gedcomx/test_date_parts.cpp
 	gedcomx/test_place_logic.cpp
+	gedcomx/test_tree_layout.cpp
 	storage/test_person_storage.cpp
 	storage/test_aggregate_storage.cpp
 	storage/test_relationship_storage.cpp
