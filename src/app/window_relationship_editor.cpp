@@ -398,7 +398,7 @@ void Window::renderRelationshipEditorCitationsTab(const std::vector<gedcomx::Sou
 
 void Window::renderRelationshipEditorAttributesTab() {}
 
-void Window::requestNewRelationshipEditor() {
+void Window::requestNewRelationshipEditor(const gedcomx::Person* person1) {
     workingRelationship_ = gedcomx::Relationship{};
     resetRelFactForm();
 
@@ -409,6 +409,12 @@ void Window::requestNewRelationshipEditor() {
         pendingSearchQuery_[i].reset();
     }
     relationshipSourceId_.clear();
+
+    if (person1) {  // same state as picking them in the Person 1 list: it also locks the source
+        personSearchResults_[0] = { *person1 };
+        selectedPersonIndex_[0] = 0;
+        relationshipSourceId_ = person1->sourceId;
+    }
 
     editingExistingRelationship_ = false;
 

@@ -228,19 +228,24 @@ void Window::renderCanvas(
         bool wasClick = mdx * mdx + mdy * mdy <= clickMoveTolerance * clickMoveTolerance;
 
         if (wasClick && ImGui::IsWindowHovered()) {
-            // Nodes win over lines (and are reserved for a future node menu).
-            bool onNode = false;
-            for (const auto& person : people) {
-                ImVec2 sp = camera_.worldToScreen(nodePositions_[person.id]);
+            // Nodes win over lines
+            const gedcomx::Person* hitPerson = nullptr;
+            for (auto pit = people.rbegin(); pit != people.rend(); ++pit) {
+                ImVec2 sp = camera_.worldToScreen(nodePositions_[pit->id]);
                 float dx = mousePos.x - sp.x, dy = mousePos.y - sp.y;
                 float r = nodeRadius * camera_.zoom();
                 if (dx * dx + dy * dy <= r * r) {
-                    onNode = true;
+                    hitPerson = &*pit;
                     break;
                 }
             }
 
-            if (!onNode) {
+            if (hitPerson) {
+                contextPerson_ = *hitPerson;
+                selectedPlaceId_ = hitPerson->id;  // like a left click: the Details panel follows
+                ImGui::OpenPopup("PersonContext");
+            }
+            else {
                 const float lineHitRadius = 6.0f;
                 float bestSq = lineHitRadius * lineHitRadius;
                 const gedcomx::Relationship* best = nullptr;
@@ -321,44 +326,7 @@ void Window::renderCanvas(
         }
     }
 
-    if (ImGui::BeginPopup("RelationshipContext")) {
-        auto findPerson = [&](const std::string& id) {
-            return std::find_if(people.begin(), people.end(),
-                [&](const gedcomx::Person& p) {
-                    return p.id == id;
-                });
-        };
-        if (contextRelationship_) {
-            auto p1 = findPerson(contextRelationship_->person1Id);
-            auto p2 = findPerson(contextRelationship_->person2Id);
-            bool both = p1 != people.end() && p2 != people.end();
-            const bool aggregate = (viewMode_ == ViewMode::Aggregate);
-            ImGui::BeginDisabled(!both || aggregate);
-            if (ImGui::MenuItem("Edit Relationship...") && both && !aggregate) {
-                requestEditRelationshipEditor(*contextRelationship_, *p1, *p2);
-            }
-            ImGui::EndDisabled();
-            if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("Switch to All Sources or a single source to edit");
-            }
-            ImGui::Separator();
-            ImGui::BeginDisabled(!both || aggregate);
-            if (ImGui::MenuItem("Delete Relationship...") && both && !aggregate) {
-                requestDelete(DeleteRequest::Kind::Relationship,
-                    contextRelationship_->sourceId + ":" + contextRelationship_->id,
-                    p1->primaryFullText() + " and " + p2->primaryFullText());
-            }
-            ImGui::EndDisabled();
-        }
-        ImGui::EndPopup();
-    }
-
-    if (ImGui::BeginPopup("CanvasContext")) {
-        ImGui::BeginDisabled(!projectOpen_);
-        if (ImGui::MenuItem("Go to Person...")) requestGoToPersonModal();
-        ImGui::EndDisabled();
-        ImGui::EndPopup();
-    }
+    renderContextMenus(people);
 
     ImGui::End();
 
@@ -547,4 +515,70 @@ std::string Window::consumeReRootRequest() {
     std::string result = reRootRequestId_;
     reRootRequestId_.clear();
     return result;
+}
+
+bool Window::editMenuItem(const char* label, bool enabled, const char* verb) {
+    const bool aggregate = (viewMode_ == ViewMode::Aggregate);
+    ImGui::BeginDisabled(aggregate || !enabled);
+    const bool clicked = ImGui::MenuItem(label);
+    ImGui::EndDisabled();
+    if (aggregate && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Switch to All Sources or a single source to %s", verb);
+    return clicked && enabled && !aggregate;
+}
+
+void Window::renderContextMenus(const std::vector<gedcomx::Person>& people) {
+    if (ImGui::BeginPopup("PersonContext")) {
+        if (contextPerson_) {
+            const gedcomx::Person& person = *contextPerson_;
+
+            ImGui::TextDisabled("%s", person.primaryFullText().c_str());
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Edit Person...")) requestEditPersonEditor(person);
+            if (editMenuItem("Add / Edit Children...")) requestAddChildren(person);
+            if (editMenuItem("Create Relationship...")) requestNewRelationshipEditor(&person);
+
+            ImGui::Separator();
+            if (ImGui::MenuItem("Explore from here")) reRootRequestId_ = person.id;
+            if (ImGui::MenuItem("Link to another person..."))requestLinkPersonModal(person.id);
+
+            ImGui::Separator();
+            if (editMenuItem("Delete Person...", true, "delete"))
+                requestDelete(DeleteRequest::Kind::Person, person.id, person.primaryFullText());
+        }
+        ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopup("RelationshipContext")) {
+        if (contextRelationship_) {
+            auto findPerson = [&](const std::string& id) {
+                return std::find_if(people.begin(), people.end(),
+                    [&](const gedcomx::Person& p) {
+                        return p.id == id;
+                });
+            };
+            auto p1 = findPerson(contextRelationship_->person1Id);
+            auto p2 = findPerson(contextRelationship_->person2Id);
+            bool both = p1 != people.end() && p2 != people.end();  // both ends must be in view
+
+            if (editMenuItem("Edit Relationship...", both))
+                requestEditRelationshipEditor(*contextRelationship_, *p1, *p2);
+
+            ImGui::Separator();
+            if (editMenuItem("Delete Relationship...", both, "delete"))
+                requestDelete(DeleteRequest::Kind::Relationship,
+                    contextRelationship_->sourceId + ":" + contextRelationship_->id,
+                    p1->primaryFullText() + " and " + p2->primaryFullText());
+        }
+        ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopup("CanvasContext")) {
+        ImGui::BeginDisabled(!projectOpen_);
+        if (ImGui::MenuItem("New Person...")) requestNewPersonEditor();
+        if (ImGui::MenuItem("Go to Person...")) requestGoToPersonModal();
+        ImGui::EndDisabled();
+        ImGui::EndPopup();
+    }
 }

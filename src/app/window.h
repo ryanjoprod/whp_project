@@ -171,7 +171,7 @@ public:
 	void setLinkSearchResults(const std::vector<gedcomx::Person>& results);
 
 	// Relationship window
-	void requestNewRelationshipEditor();
+	void requestNewRelationshipEditor(const gedcomx::Person* person1 = nullptr);  // pre-filled as Person 1
 	void requestEditRelationshipEditor(const gedcomx::Relationship& relationship, const gedcomx::Person& person1, const gedcomx::Person& person2);
 	void renderRelationshipEditor(const std::vector<gedcomx::SourceDescription>& knownSources);
 	struct ExistingChild {
@@ -276,6 +276,10 @@ private:
 	static constexpr float kPopupMargin = 16.0f;
 	bool beginModal(const char* name, bool* open, ImGuiWindowFlags flags = 0);  // BeginPopupModal that never grows past the window
 	void fitNextWindow(const char* name);  // cap the next window's size and pull its position inside the main window
+	void renderContextMenus(const std::vector<gedcomx::Person>& people);
+	// A menu item greyed out in the Aggregate view (merged people cannot be edited), with the usual tooltip.
+	// `enabled` is any extra condition. Returns true when it was clicked and is allowed.
+	bool editMenuItem(const char* label, bool enabled = true, const char* verb = "edit");
 
 	struct EditableNameEntry {
 		char given[128] = "";
@@ -317,6 +321,7 @@ private:
 	ImVec2 rightClickStartPos_;
 	bool rightClickArmed_ = false;  // press started on the canvas3
 	std::optional<gedcomx::Relationship> contextRelationship_;  // copy, not a pointer
+	std::optional<gedcomx::Person> contextPerson_;  // the person the node menu was opened on
 
 	// Fact display state
 	std::string selectedPersonId_;
