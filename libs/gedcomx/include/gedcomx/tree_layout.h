@@ -12,6 +12,7 @@ namespace gedcomx {
 		std::vector<std::pair<std::string, std::string>> couples;  // partners (either one)
 		std::vector<std::pair<std::string, std::string>> parentChild;  // (parent, child)
 		std::string rootId;  // the person the view is centered on
+		std::map<std::string, long long> birthSort;  // person id -> birth date sort value; missing = unknown (sorts last)
 	};
 
 	// Which row each person goes on: the root's row is 0, ancestors are negative, descendants positive.

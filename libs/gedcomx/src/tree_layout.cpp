@@ -2,6 +2,8 @@
 #include <queue>
 #include <set>
 #include <unordered_map>
+#include <cmath>
+#include <limits>
 
 #include "gedcomx/tree_layout.h"
 
@@ -262,6 +264,29 @@ namespace gedcomx {
 		for (size_t unit : discovered)
 			rows[static_cast<size_t>(personRow[unit] - topRow)].push_back(unit);
 
+		// Birth-order ket per unit. A partner who married in must not decide where the family's child
+		// stands, so use the members who are somebody's child when there are any. Unknown sorts last.
+		constexpr long long kUnknownBirth = std::numeric_limits<long long>::max();
+		std::vector<bool> isChild(count, false);
+		for (const auto& edge : input.parentChild) {
+			auto parent = s.indexOf.find(edge.first);
+			auto child = s.indexOf.find(edge.second);
+			if (parent != s.indexOf.end() && child != s.indexOf.end())
+				isChild[child->second] = true;
+		}
+		std::vector<long long> unitBirth(count, kUnknownBirth);
+		for (size_t unit : unitIds) {
+			bool anyChild = false;
+			for (size_t p : members[unit])
+				if (isChild[p]) anyChild = true;
+			for (size_t p : members[unit]) {
+				if (anyChild && !isChild[p]) continue;
+				auto it = input.birthSort.find(input.people[p]);
+				if (it != input.birthSort.end())
+					unitBirth[unit] = std::min(unitBirth[unit], it->second);
+			}
+		}
+
 		// Fewer crossings: sort each row by where the units it connects to sit in THEIR rows (as a fraction
 		// of the row, so rows of diferent lengths compare), downwards by parents, then upwards by children.
 		std::vector<double> fraction(count, 0.0);
@@ -272,7 +297,7 @@ namespace gedcomx {
 		};
 
 		auto sortRow = [&](std::vector<size_t>& row, bool byParents) {
-			std::vector<std::pair<double, size_t>> keyed;
+			std::vector<std::pair<long long, size_t>> keyed;
 			for (size_t unit : row) {
 				const auto& neighbors = byParents ? s.parentUnits[unit] : s.childUnits[unit];
 				double key = fraction[unit];
@@ -282,11 +307,13 @@ namespace gedcomx {
 						sum += fraction[n];
 					key = sum / neighbors.size();
 				}
-				keyed.emplace_back(key, unit);
+				keyed.emplace_back(std::llround(key * 1e6), unit);	// quantized, so equal keys really are equal
 			}
 			std::stable_sort(keyed.begin(), keyed.end(),
-				[](const std::pair<double, size_t>& a, const std::pair<double, size_t>& b) {
-					return a.first < b.first;
+				[&](const std::pair<long long, size_t>& a, const std::pair<long long, size_t>& b) {
+					if (a.first != b.first) return a.first < b.first;
+					if (unitBirth[a.second] != unitBirth[b.second]) return unitBirth[a.second] < unitBirth[b.second];
+					return input.people[members[a.second][0]] < input.people[members[b.second][0]];
 			});
 			for (size_t k = 0; k < row.size(); ++k)
 				row[k] = keyed[k].second;

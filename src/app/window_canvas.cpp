@@ -137,8 +137,11 @@ void Window::updateLayout(const std::vector<gedcomx::Person>& people, const std:
 void Window::applyTreeLayout(const std::vector<gedcomx::Person>& people, const std::vector<gedcomx::Relationship>& relationships) {
     gedcomx::TreeLayoutInput input;
     input.rootId = rootPersonId_;
-    for (const auto& person : people)
+    for (const auto& person : people) {
         input.people.push_back(person.id);
+        if (const auto* birth = person.primaryBirthFact(); birth && birth->date.sortValue)
+            input.birthSort[person.id] = *birth->date.sortValue;
+    }
     for (const auto& rel : relationships) {
         if (rel.type == gedcomx::kParentChildType)
             input.parentChild.emplace_back(rel.person1Id, rel.person2Id);
@@ -149,7 +152,8 @@ void Window::applyTreeLayout(const std::vector<gedcomx::Person>& people, const s
     const bool unchanged = input.people == lastTreeInput_.people
         && input.couples == lastTreeInput_.couples
         && input.parentChild == lastTreeInput_.parentChild
-        && input.rootId == lastTreeInput_.rootId;
+        && input.rootId == lastTreeInput_.rootId
+        && input.birthSort == lastTreeInput_.birthSort;
     if (!unchanged) {
         treePoints_ = gedcomx::layoutTree(input);
         lastTreeInput_ = std::move(input);

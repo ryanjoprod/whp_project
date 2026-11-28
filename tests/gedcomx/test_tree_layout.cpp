@@ -208,3 +208,33 @@ TEST_CASE("layoutTree gives the same answer every time") {
 		CHECK(entry.second.y == doctest::Approx(second.at(entry.first).y));
 	}
 }
+
+TEST_CASE("siblings stand in birth order whoever the root is") {
+	gedcomx::TreeLayoutInput in;
+	in.people = { "dad", "mom", "cain", "abel", "seth" };
+	in.couples = { { "dad", "mom" } };
+	for (const char* kid : { "cain", "abel", "seth" }) {
+		in.parentChild.emplace_back("dad", kid);
+		in.parentChild.emplace_back("mom", kid);
+	}
+	in.birthSort = { { "cain", 1000 },{ "abel", 2000 },{ "seth", 3000 } };
+
+	for (const char* root : { "cain", "abel", "seth", "dad" }) {
+		in.rootId = root;
+		auto pts = gedcomx::layoutTree(in);
+		CHECK(pts["cain"].x < pts["abel"].x);
+		CHECK(pts["abel"].x < pts["seth"].x);
+	}
+}
+
+TEST_CASE("a sibling with no birth date goes last") {
+	gedcomx::TreeLayoutInput in;
+	in.people = { "dad", "a", "b", "c" };
+	for (const char* kid : { "a", "b", "c" })
+		in.parentChild.emplace_back("dad", kid);
+	in.birthSort = { { "b", 1000 },{ "c", 2000 } };   // "a" unknown
+	in.rootId = "a";
+	auto pts = gedcomx::layoutTree(in);
+	CHECK(pts["b"].x < pts["c"].x);
+	CHECK(pts["c"].x < pts["a"].x);
+}
