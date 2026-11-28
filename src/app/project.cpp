@@ -13,7 +13,8 @@ std::string serializeProject(const Project& project) {
 	j["cameraZoom"] = project.cameraZoom;
 	j["settings"] = {
 		{"neighborhoodDepth", project.settings.neighborhoodDepth},
-		{"maxVisibleNodes", project.settings.maxVisibleNodes}
+		{"maxVisibleNodes", project.settings.maxVisibleNodes},
+		{"layout", project.settings.layout},
 	};
 
 	return j.dump(2);  // pretty-printed, 2-space indent
@@ -39,6 +40,7 @@ std::optional<Project> deserializeProject(const std::string& jsonText, const std
 		if (j.contains("settings")) {
 			project.settings.neighborhoodDepth = j.at("settings").value("neighborhoodDepth", 2);
 			project.settings.maxVisibleNodes = j.at("settings").value("maxVisibleNodes", (size_t)200);
+			project.settings.layout = j.at("settings").value("layout", std::string("graph"));
 		}
 
 		return project;

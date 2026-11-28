@@ -29,6 +29,7 @@ Everything inside a SQL string compiles. Real bugs found so far, so check these 
 - `(flags && SDL_WINDOW_MAXIMIZED)` compiles and is true whenever ANY flag is set; a bit test needs `&`. A bitwise test mistyped as `&&` shows up only as "always true", so log the raw value when a flag check misbehaves.
 - A log line placed after `return` never runs. When a debug line does not appear, check that it is reachable before suspecting the logger.
 - Save and load paths must come from one helper (`userDataFolder()`); one side keeping a relative path means the file is written but never read.
+- A one-character typo in logic (`unit == 1` for `unit == i`, `/` for `-`) compiles and gives plausible but wrong output; layout and ordering logic gets unit tests that check exact positions, not just "it ran".
 - Pure logic that must be tested (`fitRectToDisplays`) lives in its own `.cpp` with no SDL, ImGui or logger includes, and is added to both the `app` and `whp_tests` targets.
 
 ## Quick schema check
@@ -45,6 +46,7 @@ Extract the raw string from `schema.h`, feed it to `sqlite3` line by line with `
 ## ImGui
 
 - Every `BeginTabItem` that returns true needs `EndTabItem`; every `PushID` needs `PopID` on all paths. "Missing PopID()" usually means one of those.
+- `BeginMenu` returns true only while that menu is open, so a missing `EndMenu()` inside its braces runs fine until you hover the menu, then ImGui's assert aborts the debug build ("abort() has been called", nothing in the log). Same rule for every `if (BeginX(...))`: the matching `EndX()` goes inside the braces, after the items. A nested submenu needs its own `EndMenu()`.
 - `BeginChild` always needs `EndChild`, even when it returns false.
 - Request/response between `Window` and `App`: the Window sets a pending request, `App` consumes it, queries the DB and pushes results back (`setX`). Used for references, a person's events and a source's events.
 - Owner enums so only the owning editor renders nested popups.

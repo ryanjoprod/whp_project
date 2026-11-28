@@ -81,6 +81,7 @@ void App::openProject(const std::string& whoprojPath) {
 	currentRootKey_ = currentProject_->currentRootKey;
 
 	window_.setCameraState(currentProject_->cameraOffsetX, currentProject_->cameraOffsetY, currentProject_->cameraZoom);
+	window_.setTreeLayout(currentProject_->settings.layout == "tree");
 
 	if (!currentRootKey_.empty()) {
 		auto rootPerson = db_->loadPerson(currentRootKey_);
@@ -106,6 +107,7 @@ void App::saveProject() {
 
 	currentProject_->settings.neighborhoodDepth = neighborhoodDepth_;
 	currentProject_->settings.maxVisibleNodes = maxVisibleNodes_;
+	currentProject_->settings.layout = window_.treeLayout() ? "tree" : "graph";
 
 	std::ofstream out(projectFilePath());
 	out << serializeProject(*currentProject_);
@@ -148,6 +150,7 @@ void App::backUpProject(const std::string& destinationFolder) {
 
 void App::closeCurrentProject() {
 	window_.setPhysicsSettings(AppSettings());
+	window_.setTreeLayout(false);
 	db_.reset();  // closes the database connection
 	currentProject_.reset();
 	visiblePeopleMap_.clear();

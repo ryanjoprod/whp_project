@@ -9,6 +9,7 @@
 struct ProjectSettings {
 	int neighborhoodDepth = 2;
 	size_t maxVisibleNodes = 200;
+	std::string layout = "graph";  // graph or tree
 };
 
 struct Project {
@@ -41,7 +42,8 @@ struct Project {
 //   "cameraZoom" : 1.2,
 //   "settings" : {
 //     "neighborhoodDepth": 2,
-//     "maxVisibleNodes" : 200
+//     "maxVisibleNodes" : 200,
+//	   "layout" : "graph"
 //   }
 // }
 std::string serializeProject(const Project& project);

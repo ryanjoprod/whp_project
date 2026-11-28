@@ -118,6 +118,8 @@ public:
 	void setCameraState(float x, float y, float zoom) { camera_.setState(ImVec2(x, y), zoom); }
 	ImVec2 cameraOffset() const { return camera_.offset(); }
 	float cameraZoom() const { return camera_.zoom(); }
+	bool treeLayout() const { return layoutMode_ == LayoutMode::Tree; }
+	void setTreeLayout(bool tree) { layoutMode_ = tree ? LayoutMode::Tree : LayoutMode::Graph; }
 
 	// Error Logging
 	void renderLogWindow();
