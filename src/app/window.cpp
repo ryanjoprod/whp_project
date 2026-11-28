@@ -6,6 +6,7 @@
 
 #include "window.h"
 #include "logger.h"
+#include "app_paths.h"
 
 namespace {
 	// Useable area of every connected monitor, primary FIRST (what fitRectToDisplays expects).
@@ -79,6 +80,11 @@ Window::Window(const WindowState& saved) {
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	{
+		const auto u8 = (userDataFolder() / "imgui.ini").u8string();
+		imguiIniPath_.assign(reinterpret_cast<const char*>(u8.data()), u8.size());
+		ImGui::GetIO().IniFilename = imguiIniPath_.c_str();
+	}
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplSDL3_InitForSDLRenderer(window_, renderer_);

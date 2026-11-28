@@ -34,3 +34,5 @@ add_executable(whp_tests
 
 target_include_directories(whp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src/app)
 target_link_libraries(whp_tests PRIVATE gedcomx storage doctest::doctest unofficial::sqlite3::sqlite3)
+
+add_test(NAME whp_tests COMMAND whp_tests)

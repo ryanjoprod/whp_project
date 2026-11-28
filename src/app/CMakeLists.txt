@@ -25,7 +25,15 @@ add_executable(app WIN32
 )
 
 target_link_libraries(app PRIVATE storage SDL3::SDL3-shared imgui::imgui)
+target_compile_definitions(app PRIVATE WHP_VERSION="${PROJECT_VERSION}")
 
 if (MSVC)
 	target_link_options(app PRIVATE /ENTRY:mainCRTStartup)
+endif()
+
+install(TARGETS app RUNTIME DESTINATION .)
+
+if (WIN32)
+	# The DLLs the app needs next to it (SDL3.dll, sqlite3.dll)
+	install(FILES $<TARGET_RUNTIME_DLLS:app> DESTINATION .)
 endif()

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(whp_program CXX)
+project(whp_program VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,3 +16,11 @@ add_subdirectory(tests)
 add_subdirectory(libs/gedcomx)
 add_subdirectory(libs/storage)
 add_subdirectory(src/app)
+
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+include(InstallRequiredSystemLibraries)
+
+set(CPACK_GENERATOR ZIP)
+set(CPACK_PACKAGE_NAME "WHP-Program")
+set(CPACK_PACKAGE_FILE_NAME "WHP-Program-${PROJECT_VERSION}-win64")
+include(CPack)

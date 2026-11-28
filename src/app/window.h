@@ -271,6 +271,7 @@ public:
 	void invalidateDetailsEvents() { detailsEventsRequestedFor_.clear(); }  // the panel asks again next frame
 
 private:
+	std::string imguiIniPath_;  // ImGui keeps a pointer to this, so it must outlive the context
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
 	bool running_ = true;

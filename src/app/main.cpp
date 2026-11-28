@@ -12,6 +12,7 @@
 int main(int argc, char* argv[]) {
 	const auto dataFolder = userDataFolder();
 	Logger::init(dataFolder / "whp_program.log");
+	Logger::log(LogLevel::Info, std::string("WHP Program ") + WHP_VERSION);
 
 	WindowState windowState;
 	std::ifstream stateFile(dataFolder / "window_state.json");
