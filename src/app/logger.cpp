@@ -5,7 +5,7 @@
 
 #include "logger.h"
 
-void Logger::init(const std::string& logFilePath) {
+void Logger::init(const std::filesystem::path& logFilePath) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	logFilePath_ = logFilePath;
 
@@ -14,7 +14,8 @@ void Logger::init(const std::string& logFilePath) {
 	std::ofstream test(logFilePath_, std::ios::app);
 	if (!test) {
 		logFilePath_.clear();  // disable file writing; in-memory logging still works
-		entries_.push_back({ LogLevel::Warning, "Could not open log file for writing: " + logFilePath });
+		const auto u8 = logFilePath.u8string();
+		entries_.push_back({ LogLevel::Warning, "Could not open log file for writing: " + std::string(reinterpret_cast<const char*>(u8.data()), u8.size()) });
 	}
 }
 

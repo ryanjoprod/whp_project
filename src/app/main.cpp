@@ -1,3 +1,5 @@
+#include <SDL3/SDL_main.h>
+
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -7,11 +9,12 @@
 #include "logger.h"
 #include "window_state.h"
 
-int main() {
-	Logger::init("whp_program.log");
+int main(int argc, char* argv[]) {
+	const auto dataFolder = userDataFolder();
+	Logger::init(dataFolder / "whp_program.log");
 
 	WindowState windowState;
-	std::ifstream stateFile(userDataFolder() / "window_state.json");
+	std::ifstream stateFile(dataFolder / "window_state.json");
 
 	if (stateFile) {
 		std::string jsonText((std::istreambuf_iterator<char>(stateFile)), std::istreambuf_iterator<char>());

@@ -1,7 +1,7 @@
 find_package(SDL3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
-add_executable(app 
+add_executable(app WIN32 
 	main.cpp
 	app.cpp
 	app_paths.cpp
@@ -25,3 +25,7 @@ add_executable(app
 )
 
 target_link_libraries(app PRIVATE storage SDL3::SDL3-shared imgui::imgui)
+
+if (MSVC)
+	target_link_options(app PRIVATE /ENTRY:mainCRTStartup)
+endif()
