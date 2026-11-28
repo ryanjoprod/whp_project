@@ -58,6 +58,29 @@ Extract the raw string from `schema.h`, feed it to `sqlite3` line by line with `
 - The event-watch redraw is only for the OS resize drag. The main loop must call `App::renderFrame()` each iteration; if only the watcher draws, the UI lags by seconds and goes black when the watcher is off.
 - Never call `SDL_RenderPresent` or `ImGui::NewFrame` from a window-event handler unless the redraw guard (`allowLiveRedraw_`) says the loop is between frames.
 
+## Building a release
+
+A release is the `windows-release` preset (Release, `/O2`, `NDEBUG`). Never ship anything from the Debug folder: it is slower and needs the Debug runtime.
+
+Steps:
+1. Configure and build. In Visual Studio pick `windows-release`, then Project -> Configure Cache and Build All. From a terminal use the **x64 Native Tools Command Prompt**: `cmake --preset windows-release`, then `cmake --build out/build/windows-release`.
+2. Test the Release build: `ctest --test-dir out/build/windows-release` (one ctest entry runs every doctest case). Release can fail where Debug passes (uninitialized variables, undefined behavior).
+3. Check the install layout: `cmake --install out/build/windows-release --prefix out/install`. It must hold `app.exe`, `SDL3.dll`, `sqlite3.dll` and the Visual C++ runtime DLLs (`vcruntime140*.dll`, `msvcp140*.dll`).
+4. Package: run `cpack` inside `out/build/windows-release`. It writes `WHP-Program-<version>-win64.zip`.
+5. Test the zip on a clean machine (Windows Sandbox is enough): it starts, opens a copy of a test project, File -> Back Up Project works, window state is remembered, and the log is at `%APPDATA%\WHP\WHP Program\whp_program.log`.
+6. Version and tag: the version is `project(whp_program VERSION x.y.z)` in the root `CMakeLists.txt` (keep `vcpkg.json` in step). Commit, `git tag -a vX.Y.Z -m "..."`, then build the zip from the tagged commit.
+
+Pitfalls found while making the first release:
+- `add_compile_options` only affects targets created AFTER it. In the root `CMakeLists.txt` it must come before every `add_subdirectory`, or `/we4715 /we4716` silently does nothing. Also GCC and Clang flags are case-sensitive (`-Werror=return-type`).
+- A configure from the wrong shell (not x64, or not `--preset`) builds a cache with a 32-bit `cl.exe` and no vcpkg toolchain, and the first `find_package` fails ("Could not find doctest"). Check `CMakeCache.txt` for `CMAKE_TOOLCHAIN_FILE`; if it is missing, delete the build folder and configure again.
+- The `WIN32` (GUI subsystem) executable needs a `WinMain`. Include `<SDL3/SDL_main.h>` in `main.cpp` only, and write `int main(int argc, char* argv[])`. SDL renames `main` to `SDL_main`, so `int main()` becomes a different C++ function and fails with LNK2019 "unresolved external symbol SDL_main". With no console, `stdout` goes nowhere: the log file and the in-app log are the only diagnostics.
+- A function that takes `std::filesystem::path` also accepts a string literal, silently. `Logger::init("whp_program.log")` kept compiling after the signature changed and kept writing to the current folder. After introducing a shared folder variable, search for leftover literals.
+- Never call `.string()` on a path that can hold a user name (it goes through the ANSI code page). Pass `std::filesystem::path` through, and use `u8string()` plus `reinterpret_cast<const char*>` when a UTF-8 `std::string` is needed.
+- Anything written at run time goes under `userDataFolder()` or the project folder, never relative to the current folder. After a change, start the app from another folder and check that no new files appear next to it.
+- An editor autocomplete can change a CMake word (`set(CPACK_GENERATOR FindBZip2)` instead of `ZIP`); CPack then fails with "Could not create CPack generator". `CPackConfig.cmake` in the build folder shows what CPack was actually given.
+- DLLs are installed with `install(FILES $<TARGET_RUNTIME_DLLS:app> DESTINATION .)`; the runtime with `InstallRequiredSystemLibraries`, after `CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION` is set to `.`. `include(CPack)` stays last in the root file.
+- ImGui keeps the `IniFilename` pointer instead of copying the text. The path lives in a `Window` member (`imguiIniPath_`) so it outlives the ImGui context; `Window` must not be copied.
+
 ## Folder rules for this project
 
 - Only `C:\Users\ryan\Documents\whp\whp_program` and `...\whp\test` are valid. The assistant uses them read-only unless told otherwise (the `docs/` folder was written with explicit permission). All data is fake; test databases are throwaway.
